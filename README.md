@@ -21,20 +21,59 @@
 - `references/workflow_zh.md`：DISCUSS/FREEZE/GENERATE 工作流约束
 - `references/file_contract_zh.md`：文件契约与验收清单
 
-## 生成结果骨架
+## 生成结果骨架（标准树状图）
 
-脚本会在目标工作区下生成：
+脚本会在目标工作区生成如下 `research/` 结构（模板）：
 
-- `research/README.md`
-- `research/plans/ACTIVE_PLAN.md`
-- `research/plans/<project_slug>/master_plan_zh.md`
-- `research/plans/session_bootstrap_prompt_zh.md`
-- `research/guides/README.md`
-- `research/reviews/README.md`
-- `research/handoffs/README.md`
-- `research/retrospectives/<project_slug>/README.md`
-- `research/retrospectives/<project_slug>/TEMPLATE_retrospective_zh.md`
-- `research/artifacts/tmp/.gitkeep`
+```text
+research/
+├── README.md
+├── plans/
+│   ├── ACTIVE_PLAN.md
+│   ├── session_bootstrap_prompt_zh.md
+│   └── <project_slug>/
+│       └── master_plan_zh.md
+├── guides/
+│   └── README.md
+├── reviews/
+│   └── README.md
+├── handoffs/
+│   └── README.md
+├── retrospectives/
+│   └── <project_slug>/
+│       ├── README.md
+│       └── TEMPLATE_retrospective_zh.md
+└── artifacts/
+    └── tmp/
+        └── .gitkeep
+```
+
+## research 目录与文件作用
+
+| 路径 | 类型 | 作用 | 何时更新 |
+| --- | --- | --- | --- |
+| `research/README.md` | 文件 | 说明整个 research 工作区的用途与边界。 | 初始化后按需更新。 |
+| `research/plans/` | 目录 | 存放计划入口、主计划和阶段计划。 | 每次阶段切换或计划调整时更新。 |
+| `research/plans/ACTIVE_PLAN.md` | 文件 | 当前阶段唯一入口；新会话优先读取。 | 每次里程碑切换、`must_read` 变化时更新。 |
+| `research/plans/<project_slug>/master_plan_zh.md` | 文件 | 项目长期主计划（目标、里程碑、验收标准）。 | 方向变化或里程碑重排时更新。 |
+| `research/plans/session_bootstrap_prompt_zh.md` | 文件 | 跨平台新会话启动模板。 | 会话协议调整时更新。 |
+| `research/guides/README.md` | 文件 | 指南目录入口；用于放运行手册和操作指南。 | 新增指南文档时同步更新。 |
+| `research/reviews/README.md` | 文件 | 审查目录入口；用于放审查报告和修复提示词。 | 产出审查材料时同步更新。 |
+| `research/handoffs/README.md` | 文件 | 交接目录入口；用于跨会话交接文档。 | 会话交接流程变化时更新。 |
+| `research/retrospectives/<project_slug>/README.md` | 文件 | 复盘索引，按里程碑记录复盘列表。 | 每次新增阶段复盘后更新。 |
+| `research/retrospectives/<project_slug>/TEMPLATE_retrospective_zh.md` | 文件 | 阶段复盘模板（问题/思路/实现/验证/局限/下一步/借鉴边界）。 | 模板规范变化时更新。 |
+| `research/artifacts/tmp/.gitkeep` | 文件 | 保留临时产物目录结构。 | 一般不需更新。 |
+
+## 维护建议（最小流程）
+
+1. `讨论项目方案`：先讨论目标、里程碑、边界，不改文档。  
+2. `冻结当前方案`：生成冻结摘要，锁定 `Goal / Milestones / Next Action / Out of Scope`。  
+3. `开始初始化 research 工作区`：只在此阶段落盘更新 `research/`。  
+4. 阶段完成后写 retrospective：同步更新 `ACTIVE_PLAN.md` 的 `latest_retrospective` 与 `must_read`。  
+
+维护规则：
+- `ACTIVE_PLAN.md` 是当前阶段唯一入口文件。
+- 运行产物不写入 `research/`，统一放到项目运行目录（如 `outputs/`）。
 
 ## 安装说明
 
@@ -152,9 +191,10 @@ python "$script" --workspace-root "$tmpdir" --project-slug demo_project
 
 ## 验证建议
 
-1. 结构完整性：确认目标骨架文件全部生成。
-2. 幂等性：连续运行两次，第二次应主要为 `skipped`。
-3. 会话继承：新对话先读 `ACTIVE_PLAN.md`，再读 `must_read`，首条输出 `Goal / Current Milestone / Next Action`。
+1. 结构完整性：树状图中的路径都能在生成结果中找到。
+2. 角色清晰性：可快速指出“当前阶段入口是 `ACTIVE_PLAN.md`，复盘模板是 `TEMPLATE_retrospective_zh.md`”。
+3. 幂等性：连续运行两次，第二次应主要为 `skipped`。
+4. 会话继承：新对话先读 `ACTIVE_PLAN.md`，再读 `must_read`，首条输出 `Goal / Current Milestone / Next Action`。
 
 ## 约束与约定
 
