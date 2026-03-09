@@ -65,6 +65,26 @@ git pull
 - 新开一个 Codex 对话，或重启当前会话环境。
 - 然后直接使用触发语句：`讨论项目方案` / `冻结当前方案` / `开始初始化 research 工作区`。
 
+### 4) 让 AI 自动安装（skill-installer）
+
+在新机器上，你可以直接对 AI 发送下面这段话，让它自动调用 `skill-installer`：
+
+```text
+使用 skill-installer 安装这个 skill：
+repo=Cayman-Wang/project-research-bootstrap-skill
+path=.
+name=project-research-bootstrap
+安装后提醒我重启/新开 Codex 会话。
+```
+
+如果你的环境里未启用 `skill-installer`，让 AI 回退到 shell 安装：
+
+```bash
+mkdir -p ~/.codex/skills
+git clone git@github.com:Cayman-Wang/project-research-bootstrap-skill.git \
+  ~/.codex/skills/project-research-bootstrap
+```
+
 ## 使用方法
 
 ### 1) 对话协议（给 AI 的触发语义）
