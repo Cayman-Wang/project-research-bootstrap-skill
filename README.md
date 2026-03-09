@@ -36,6 +36,35 @@
 - `research/retrospectives/<project_slug>/TEMPLATE_retrospective_zh.md`
 - `research/artifacts/tmp/.gitkeep`
 
+## 安装说明
+
+### 1) 克隆到 Codex skills 目录（推荐）
+
+```bash
+mkdir -p ~/.codex/skills
+git clone git@github.com:Cayman-Wang/project-research-bootstrap-skill.git \
+  ~/.codex/skills/project-research-bootstrap
+```
+
+如果你使用 HTTPS：
+
+```bash
+git clone https://github.com/Cayman-Wang/project-research-bootstrap-skill.git \
+  ~/.codex/skills/project-research-bootstrap
+```
+
+### 2) 更新到最新版本
+
+```bash
+cd ~/.codex/skills/project-research-bootstrap
+git pull
+```
+
+### 3) 重新加载 Skill
+
+- 新开一个 Codex 对话，或重启当前会话环境。
+- 然后直接使用触发语句：`讨论项目方案` / `冻结当前方案` / `开始初始化 research 工作区`。
+
 ## 使用方法
 
 ### 1) 对话协议（给 AI 的触发语义）
@@ -57,6 +86,49 @@ python scripts/bootstrap_research_workspace.py \
 - `--dry-run`：只预览，不写文件
 - `--force-overwrite`：覆盖已有文件
 - `--date YYYY-MM-DD`：指定模板日期
+
+## 自检方法（安装后 1 分钟）
+
+### 1) 检查 Skill 文件是否完整
+
+```bash
+ls -la ~/.codex/skills/project-research-bootstrap
+find ~/.codex/skills/project-research-bootstrap -maxdepth 2 -type f | sort
+```
+
+应至少包含：`SKILL.md`、`agents/openai.yaml`、`scripts/bootstrap_research_workspace.py`、`references/*`。
+
+### 2) 运行结构校验（可选）
+
+```bash
+python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
+  ~/.codex/skills/project-research-bootstrap
+```
+
+预期输出包含：`Skill is valid!`。
+
+### 3) 运行 dry-run 冒烟测试
+
+```bash
+tmpdir=$(mktemp -d)
+python ~/.codex/skills/project-research-bootstrap/scripts/bootstrap_research_workspace.py \
+  --workspace-root "$tmpdir" \
+  --project-slug demo_project \
+  --dry-run
+```
+
+预期输出包含：`created: 10`。
+
+### 4) 运行幂等测试（连续两次）
+
+```bash
+tmpdir=$(mktemp -d)
+script=~/.codex/skills/project-research-bootstrap/scripts/bootstrap_research_workspace.py
+python "$script" --workspace-root "$tmpdir" --project-slug demo_project
+python "$script" --workspace-root "$tmpdir" --project-slug demo_project
+```
+
+预期第二次输出包含：`created: 0` 且 `skipped: 10`。
 
 ## 验证建议
 
