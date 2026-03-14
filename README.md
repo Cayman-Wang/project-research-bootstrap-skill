@@ -1,6 +1,7 @@
 # plan-your-project
 
-一个可复用的 Codex Skill，用于在新项目中初始化标准化 `research/` 工作区，并强制执行：
+一个以项目规划为核心的 Codex Skill。
+它先帮助你讨论和冻结项目方案，再在明确授权后初始化标准化 `research/` 工作区，并强制执行：
 
 - `DISCUSS`：讨论阶段，不落盘
 - `FREEZE`：冻结方案摘要，不落盘
@@ -8,10 +9,11 @@
 
 ## 核心能力
 
-1. 固化新项目研究工作区结构（plans/guides/reviews/handoffs/retrospectives/artifacts）。
-2. 提供统一的计划入口 `ACTIVE_PLAN.md`，支持跨会话继承上下文。
-3. 生成阶段复盘模板，便于持续沉淀论文和工程素材。
-4. 默认幂等：重复执行只补缺失文件，不覆盖你已编辑内容（除非显式强制）。
+1. 在 `DISCUSS` 阶段梳理目标、里程碑、约束和 out-of-scope，不提前落盘。
+2. 在 `FREEZE` 阶段冻结当前方案，明确 `Goal / Milestones / Next Action / Out of Scope`。
+3. 在 `GENERATE` 阶段初始化标准化 `research/` 工作区，统一承载计划、评审、交接与复盘。
+4. 通过 `ACTIVE_PLAN.md` 维持当前阶段入口，支持跨会话继承上下文。
+5. 默认幂等：重复执行只补缺失文件，不覆盖你已编辑内容（除非显式强制）。
 
 ## 目录结构（Skill 本体）
 
@@ -21,9 +23,9 @@
 - `references/workflow_zh.md`：DISCUSS/FREEZE/GENERATE 工作流约束
 - `references/file_contract_zh.md`：文件契约与验收清单
 
-## 生成结果骨架（标准树状图）
+## 生成阶段会创建什么
 
-脚本会在目标工作区生成如下 `research/` 结构（模板）：
+当你明确触发 `GENERATE` 后，脚本会在目标工作区生成如下 `research/` 结构（模板）：
 
 ```text
 research/
@@ -64,7 +66,7 @@ research/
 | `research/retrospectives/<project_slug>/TEMPLATE_retrospective_zh.md` | 文件 | 阶段复盘模板（问题/思路/实现/验证/局限/下一步/借鉴边界）。 | 模板规范变化时更新。 |
 | `research/artifacts/tmp/.gitkeep` | 文件 | 保留临时产物目录结构。 | 一般不需更新。 |
 
-## 维护建议（最小流程）
+## 推荐使用流程
 
 1. `讨论项目方案`：先讨论目标、里程碑、边界，不改文档。  
 2. `冻结当前方案`：生成冻结摘要，锁定 `Goal / Milestones / Next Action / Out of Scope`。  
@@ -126,13 +128,19 @@ git clone git@github.com:Cayman-Wang/plan-your-project-skill.git \
 
 ## 使用方法
 
-### 1) 对话协议（给 AI 的触发语义）
+### 1) 触发方式
+
+你可以直接显式调用：
+
+- `$plan-your-project`
+
+也可以用下面这些中文触发语义：
 
 - `讨论项目方案` -> 进入 DISCUSS
 - `冻结当前方案` -> 进入 FREEZE
 - `开始初始化 research 工作区` -> 进入 GENERATE
 
-### 2) 脚本初始化（手动执行）
+### 2) 脚本生成（手动执行）
 
 ```bash
 python scripts/bootstrap_research_workspace.py \
@@ -192,7 +200,7 @@ python "$script" --workspace-root "$tmpdir" --project-slug demo_project
 ## 验证建议
 
 1. 结构完整性：树状图中的路径都能在生成结果中找到。
-2. 角色清晰性：可快速指出“当前阶段入口是 `ACTIVE_PLAN.md`，复盘模板是 `TEMPLATE_retrospective_zh.md`”。
+2. 角色清晰性：可快速指出“当前阶段入口是 `ACTIVE_PLAN.md`，复盘模板是 `TEMPLATE_retrospective_zh.md`，只有 `GENERATE` 才会创建文件”。
 3. 幂等性：连续运行两次，第二次应主要为 `skipped`。
 4. 会话继承：新对话先读 `ACTIVE_PLAN.md`，再读 `must_read`，首条输出 `Goal / Current Milestone / Next Action`。
 
