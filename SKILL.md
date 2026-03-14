@@ -1,9 +1,9 @@
 ---
-name: project-research-bootstrap
-description: "Bootstrap and maintain a reusable research workspace for new software or research projects. Use when a user asks to set up project planning and execution documents under research/, define milestone plans and retrospectives, or enforce a discussion-first workflow with explicit phases: DISCUSS (no file writes), FREEZE (plan summary), and GENERATE (initialize files only after an explicit trigger such as '开始初始化 research 工作区')."
+name: plan-your-project
+description: "Plan a software or research project through DISCUSS, FREEZE, and GENERATE phases, and initialize the research workspace only after an explicit generate trigger."
 ---
 
-# Project Research Bootstrap
+# Plan Your Project
 
 ## Overview
 Build and maintain a standardized `research/` workspace for project planning, reviews, handoffs, and milestone retrospectives.

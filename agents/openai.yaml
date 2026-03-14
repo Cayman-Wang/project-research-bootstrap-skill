@@ -1,4 +1,4 @@
 interface:
-  display_name: "Project Research Bootstrap"
-  short_description: "Bootstrap reusable research workspace workflows"
-  default_prompt: "Use $project-research-bootstrap to discuss, freeze, and initialize a research workspace."
+  display_name: "Plan Your Project"
+  short_description: "Plan projects with a discuss-freeze-generate workflow"
+  default_prompt: "Use $plan-your-project to discuss, freeze, and initialize a research workspace."

@@ -1,4 +1,4 @@
-# project-research-bootstrap
+# plan-your-project
 
 一个可复用的 Codex Skill，用于在新项目中初始化标准化 `research/` 工作区，并强制执行：
 
@@ -81,21 +81,21 @@ research/
 
 ```bash
 mkdir -p ~/.codex/skills
-git clone git@github.com:Cayman-Wang/project-research-bootstrap-skill.git \
-  ~/.codex/skills/project-research-bootstrap
+git clone git@github.com:Cayman-Wang/plan-your-project-skill.git \
+  ~/.codex/skills/plan-your-project
 ```
 
 如果你使用 HTTPS：
 
 ```bash
-git clone https://github.com/Cayman-Wang/project-research-bootstrap-skill.git \
-  ~/.codex/skills/project-research-bootstrap
+git clone https://github.com/Cayman-Wang/plan-your-project-skill.git \
+  ~/.codex/skills/plan-your-project
 ```
 
 ### 2) 更新到最新版本
 
 ```bash
-cd ~/.codex/skills/project-research-bootstrap
+cd ~/.codex/skills/plan-your-project
 git pull
 ```
 
@@ -110,9 +110,9 @@ git pull
 
 ```text
 使用 skill-installer 安装这个 skill：
-repo=Cayman-Wang/project-research-bootstrap-skill
+repo=Cayman-Wang/plan-your-project-skill
 path=.
-name=project-research-bootstrap
+name=plan-your-project
 安装后提醒我重启/新开 Codex 会话。
 ```
 
@@ -120,8 +120,8 @@ name=project-research-bootstrap
 
 ```bash
 mkdir -p ~/.codex/skills
-git clone git@github.com:Cayman-Wang/project-research-bootstrap-skill.git \
-  ~/.codex/skills/project-research-bootstrap
+git clone git@github.com:Cayman-Wang/plan-your-project-skill.git \
+  ~/.codex/skills/plan-your-project
 ```
 
 ## 使用方法
@@ -151,8 +151,8 @@ python scripts/bootstrap_research_workspace.py \
 ### 1) 检查 Skill 文件是否完整
 
 ```bash
-ls -la ~/.codex/skills/project-research-bootstrap
-find ~/.codex/skills/project-research-bootstrap -maxdepth 2 -type f | sort
+ls -la ~/.codex/skills/plan-your-project
+find ~/.codex/skills/plan-your-project -maxdepth 2 -type f | sort
 ```
 
 应至少包含：`SKILL.md`、`agents/openai.yaml`、`scripts/bootstrap_research_workspace.py`、`references/*`。
@@ -161,7 +161,7 @@ find ~/.codex/skills/project-research-bootstrap -maxdepth 2 -type f | sort
 
 ```bash
 python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
-  ~/.codex/skills/project-research-bootstrap
+  ~/.codex/skills/plan-your-project
 ```
 
 预期输出包含：`Skill is valid!`。
@@ -170,7 +170,7 @@ python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
 
 ```bash
 tmpdir=$(mktemp -d)
-python ~/.codex/skills/project-research-bootstrap/scripts/bootstrap_research_workspace.py \
+python ~/.codex/skills/plan-your-project/scripts/bootstrap_research_workspace.py \
   --workspace-root "$tmpdir" \
   --project-slug demo_project \
   --dry-run
@@ -182,7 +182,7 @@ python ~/.codex/skills/project-research-bootstrap/scripts/bootstrap_research_wor
 
 ```bash
 tmpdir=$(mktemp -d)
-script=~/.codex/skills/project-research-bootstrap/scripts/bootstrap_research_workspace.py
+script=~/.codex/skills/plan-your-project/scripts/bootstrap_research_workspace.py
 python "$script" --workspace-root "$tmpdir" --project-slug demo_project
 python "$script" --workspace-root "$tmpdir" --project-slug demo_project
 ```
