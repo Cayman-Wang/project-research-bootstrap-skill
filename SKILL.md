@@ -30,7 +30,15 @@ Run a strict three-phase protocol: `DISCUSS -> FREEZE -> GENERATE`.
 - Create files only in this phase.
 
 ## Generate Workspace Skeleton
-Run the deterministic bootstrap script:
+Run the deterministic workspace initialization script:
+
+```bash
+python scripts/init_research_workspace.py \
+  --workspace-root <workspace_root> \
+  --project-slug <project_slug>
+```
+
+Legacy compatibility:
 
 ```bash
 python scripts/bootstrap_research_workspace.py \
@@ -57,7 +65,7 @@ Create or ensure the following paths:
 - `research/README.md`
 - `research/plans/ACTIVE_PLAN.md`
 - `research/plans/<project_slug>/master_plan_zh.md`
-- `research/plans/session_bootstrap_prompt_zh.md`
+- `research/plans/session_start_prompt_zh.md`
 - `research/guides/README.md`
 - `research/reviews/README.md`
 - `research/handoffs/README.md`

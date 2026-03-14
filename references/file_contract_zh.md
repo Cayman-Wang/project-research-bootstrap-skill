@@ -12,7 +12,7 @@
 - `research/README.md`
 - `research/plans/ACTIVE_PLAN.md`
 - `research/plans/<project_slug>/master_plan_zh.md`
-- `research/plans/session_bootstrap_prompt_zh.md`
+- `research/plans/session_start_prompt_zh.md`
 - `research/retrospectives/<project_slug>/README.md`
 - `research/retrospectives/<project_slug>/TEMPLATE_retrospective_zh.md`
 
@@ -41,4 +41,7 @@
 1. 文件完整性：核心路径都存在。
 2. 幂等性：重复执行不覆盖已有内容（除非强制覆盖）。
 3. 运行产物隔离：`research/` 不存放训练或回放产物。
-4. 会话继承：`session_bootstrap_prompt_zh.md` 可引导新对话正确读取计划。
+4. 会话继承：`session_start_prompt_zh.md` 可引导新对话正确读取计划。
+
+## 历史兼容说明
+- 旧版路径 `research/plans/session_bootstrap_prompt_zh.md` 仅作历史兼容，不再作为新输出标准。
