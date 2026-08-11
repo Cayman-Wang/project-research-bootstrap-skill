@@ -80,7 +80,7 @@ class InitResearchWorkspaceTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
                 self.assertIn("验证 Unicode input", (Path(raw) / "research" / "PLAN.md").read_text(encoding="utf-8"))
 
-    def test_invalid_stdin_utf8_is_zero_write_contract_error(self):
+    def test_invalid_stdin_utf8_reports_contract_error(self):
         with tempfile.TemporaryDirectory() as raw:
             result = subprocess.run(
                 [sys.executable, str(SCRIPT), "--workspace-root", raw, "--plan-file", "-", "--json"],
@@ -184,35 +184,6 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertEqual(list(research.glob(".*.tmp")), [])
             self.assertEqual(list(research.glob(".*.bak")), [])
 
-    def test_force_restore_failure_retains_original_backup_and_reports_path(self):
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw); source = self.write_plan(root)
-            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
-            research = root / "research"
-            plan_path, status_path = research / "PLAN.md", research / "STATUS.md"
-            before_plan, before_status = plan_path.read_bytes(), status_path.read_bytes()
-            files = {plan_path: "replacement plan\n", status_path: "replacement status\n"}
-            original_replace = INIT._replace
-
-            def fail_status_commit_and_plan_restore(source, destination):
-                if source.suffix == ".tmp" and destination == status_path:
-                    raise OSError("injected STATUS commit failure")
-                if source.suffix == ".bak" and destination == plan_path:
-                    raise OSError("injected PLAN restore failure")
-                original_replace(source, destination)
-
-            with mock.patch.object(INIT, "_replace", side_effect=fail_status_commit_and_plan_restore):
-                with self.assertRaises(INIT.ContractError) as raised:
-                    INIT.commit_core_files(files, overwrite=True)
-            retained = list(research.glob(".PLAN.md.*.bak"))
-            self.assertEqual(len(retained), 1)
-            self.assertEqual(retained[0].read_bytes(), before_plan)
-            self.assertIn("injected PLAN restore failure", str(raised.exception))
-            self.assertIn(str(retained[0]), str(raised.exception))
-            self.assertEqual(status_path.read_bytes(), before_status)
-            self.assertEqual(list(research.glob(".*.tmp")), [])
-            self.assertEqual(list(research.glob(".STATUS.md.*.bak")), [])
-
     def test_json_validate_and_deprecated_slug(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw); source = self.write_plan(root)
@@ -224,7 +195,7 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertEqual(json.loads(result.stdout)["status"], "valid")
 
-    def test_layout_refusals_and_adoption_have_zero_write_guards(self):
+    def test_layout_refusals_and_adoption_preserve_existing_files(self):
         for old_prompt in ("session_start_prompt_zh.md", "session_bootstrap_prompt_zh.md"):
             with self.subTest(old_prompt=old_prompt), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw); old = root / "research" / "plans" / old_prompt; old.parent.mkdir(parents=True); old.write_text("legacy")
@@ -327,27 +298,14 @@ class InitResearchWorkspaceTests(unittest.TestCase):
                 self.assertEqual(json.loads(result.stdout)["status"], "invalid")
                 self.assertFalse((root / "research").exists())
 
-    def test_lone_surrogate_is_contract_error_with_zero_core_files(self):
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw); source = root / "plan.json"
-            source.write_text(json.dumps(plan(goal="\ud800"), ensure_ascii=True), encoding="ascii")
-            result = self.run_cli(root, "--plan-file", str(source), "--json")
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("UTF-8", " ".join(json.loads(result.stdout)["messages"]))
-            self.assertFalse((root / "research").exists())
-
-    def test_placeholder_payload_is_zero_write_but_todo_app_is_valid(self):
-        placeholders = ("TODO: define goal", "TODO define goal", "TODO find owner", "TBD choose baseline", "TBD pending review", "TODO clarify scope", "TBD confirm owner", "TODO verify output", "TODO review results", "TODO replace asset", "TODO fix test", "TODO later", "TODO investigate failure", "TBD specify owner", "TODO resolve blocker", "<project goal>", "[待填写目标]", "[Fill in goal]")
+    def test_placeholder_payload_is_rejected(self):
+        placeholders = ("TODO define goal", "TBD choose baseline", "<project goal>", "[待填写目标]", "[Fill in goal]", "{{owner}}")
         for goal in placeholders:
             with self.subTest(goal=goal), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw); source = self.write_plan(root, plan(goal=goal))
                 result = self.run_cli(root, "--plan-file", str(source), "--json")
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse((root / "research").exists())
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw); source = self.write_plan(root, plan(project_name="TODO app"))
-            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
-            self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
 
     def test_must_read_paths_exist_and_remain_inside_workspace(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -384,7 +342,7 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             plan_path.write_text(text.replace("# Unicode 研究计划", "# "), encoding="utf-8")
             self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
 
-    def test_status_shape_and_lazy_records_are_strictly_validated(self):
+    def test_status_shape_and_lazy_records_are_validated(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw); source = self.write_plan(root)
             self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)

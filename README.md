@@ -51,7 +51,7 @@ python scripts/init_research_workspace.py \
   --plan-file <FILE|->
 ```
 
-`--plan-file` is the strictly validated frozen payload; use `-` to read it from standard input. Use `--help` for available options, including `--validate-only` and `--dry-run`; see the [file contract](references/file_contract_zh.md) for the payload schema, validation rules, and workspace behavior.
+`--plan-file` is the validated frozen payload; use `-` to read it from standard input. Use `--help` for available options, including `--validate-only` and `--dry-run`; see the [file contract](references/file_contract_zh.md) for the payload schema, validation rules, and workspace behavior.
 
 ## v2.0.0 Breaking Changes / 破坏性变更
 

@@ -6,7 +6,7 @@ v2 默认只生成 `research/PLAN.md` 和 `research/STATUS.md`。使用 `scripts
 
 检测到任一真实旧标记时，布局为 v1：`research/plans/ACTIVE_PLAN.md`、`research/plans/<slug>/master_plan_zh.md`、`research/plans/session_start_prompt_zh.md` 或 `research/plans/session_bootstrap_prompt_zh.md`。v1 保持只读；v1 与任一 v2 记录共存时，布局为 mixed，同样拒绝写入。仅有 PLAN 或 STATUS 的 v2 partial layout 为 invalid，拒绝写入。v2 不提供迁移；不要请求迁移决定，也不要在这些布局写入。
 
-## 严格 JSON 输入
+## JSON 输入
 
 `--plan-file`（或 stdin `-`）必须是单个 JSON object，键必须恰好如下。解析器拒绝重复 key。所有 payload string 必须非空且为单行（不得含 CR 或 LF）；数组项的每个 string 同样如此。`freeze_readiness` 只能是 `READY` 或 `READY_WITH_ASSUMPTIONS`，所有日期必须精确匹配 `YYYY-MM-DD`。
 
@@ -38,7 +38,7 @@ v2 默认只生成 `research/PLAN.md` 和 `research/STATUS.md`。使用 `scripts
 
 ## Markdown 输出
 
-生成器将 JSON 映射为 Markdown YAML frontmatter 加正文。frontmatter 是严格 metadata，正文保存可读的冻结计划或动态状态；不要把 JSON 原样嵌入输出。
+生成器将 JSON 映射为 Markdown YAML frontmatter 加正文。frontmatter 保存稳定 metadata，正文保存可读的冻结计划或动态状态；不要把 JSON 原样嵌入输出。
 
 `PLAN.md` frontmatter 必须恰好包含：
 
@@ -81,7 +81,7 @@ last_updated: YYYY-MM-DD
 - 默认 GENERATE 只创建 PLAN 与 STATUS 两个文件。
 - JSON 输入、CLI 参数与 PLAN 正文数据一致；两份 Markdown frontmatter 满足各自 metadata 契约。
 - STATUS 有效链接到 PLAN，`plan_revision` 与 PLAN 相同，`current_milestone` 是 PLAN 中的里程碑。
-- 生成的 PLAN、STATUS 和 lazy record 不含 `TODO`、`TBD`、`<placeholder>` 或 `{{...}}` 等未解析模板占位符；行首或列表项的 `TODO`/`TBD` 默认视为未解析，占项目名称语境的 `TODO app` 或 `TODO application` 除外。
+- 生成的 PLAN、STATUS 和 lazy record 不含常见未解析模板占位符，例如行首 `TODO`/`TBD`、`<project goal>`、`{{...}}`、`[待填写...]` 或 `[Fill in...]`。
 - v1 和 mixed 布局均未被写入。
 - 每次允许的写入后运行校验，确认没有未解析的模板占位符、记录 kind 和路径有效，且只创建或修改了已授权记录。
 

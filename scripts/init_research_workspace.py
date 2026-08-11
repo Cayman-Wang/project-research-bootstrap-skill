@@ -262,14 +262,13 @@ def section_items(body: str, heading: str) -> list[str]:
 
 
 def contains_placeholder(text: str) -> bool:
-    allowed_names = {"todo app", "todo application"}
     for line in text.splitlines():
         candidate = re.sub(r"^\s*[-*]\s*", "", line.strip(), count=1)
-        if re.match(r"(?i)^(?:TODO|TBD)\b", candidate) and candidate.lower() not in allowed_names:
+        if re.match(r"(?i)^(?:TODO|TBD)\b", candidate):
             return True
     patterns = (
         r"(?im):\s*(?:TODO|TBD)\b.*$",
-        r"<[^>\r\n]+>",
+        r"(?i)<[^>\r\n]*(?:placeholder|project|goal|todo|tbd|待填写|fill in)[^>\r\n]*>",
         r"(?i)\[(?:待填写[^\]]*|fill in[^\]]*)\]",
         r"\{\{[^}\r\n]+\}\}",
     )
