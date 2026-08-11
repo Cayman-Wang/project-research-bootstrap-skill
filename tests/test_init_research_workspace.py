@@ -103,6 +103,20 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertFalse((Path(raw) / "research").exists())
 
+    def test_strict_dates_and_duplicate_json_keys_are_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertNotEqual(self.run_cli(root, "--plan-file", str(source), "--date", "20260811").returncode, 0)
+            source.write_text(json.dumps(plan())[:-1] + ', "goal": "overridden"}', encoding="utf-8")
+            self.assertNotEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            self.assertFalse((root / "research").exists())
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source), "--date", "2026-08-11").returncode, 0)
+            plan_path = root / "research" / "PLAN.md"
+            plan_path.write_text(plan_path.read_text(encoding="utf-8").replace("frozen_at: 2026-08-11", "frozen_at: 20260811"), encoding="utf-8")
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+
     def test_idempotency_and_force(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw); source = self.write_plan(root)
@@ -175,6 +189,10 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             result = self.run_cli(root, "--validate-only")
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual((research / "PLAN.md").read_text(), "bad")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); research = root / "research"; (research / "PLAN.md").mkdir(parents=True); (research / "STATUS.md").mkdir()
+            result = self.run_cli(root, "--validate-only", "--json")
+            self.assertEqual(json.loads(result.stdout)["layout"], "invalid")
 
     def test_nested_schema_duplicate_milestones_and_rich_rendering(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -214,7 +232,10 @@ class InitResearchWorkspaceTests(unittest.TestCase):
         cases = (
             plan(milestones=[{"id": "bad id", "outcome": "x", "acceptance": ["a"]}]),
             plan(alternatives_considered=[]),
+            plan(alternatives_considered=[{"option": "Use stdlib", "tradeoffs": []}]),
+            plan(alternatives_considered=[{"option": "Alt", "tradeoffs": []}, {"option": "Alt", "tradeoffs": []}]),
             plan(freeze_readiness="READY_WITH_ASSUMPTIONS", assumptions=[]),
+            plan(next_action="Work\n## 阻塞"),
         )
         for value in cases:
             with self.subTest(value=value), tempfile.TemporaryDirectory() as raw:
@@ -234,7 +255,7 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertFalse((root / "research").exists())
 
     def test_placeholder_payload_is_zero_write_but_todo_app_is_valid(self):
-        placeholders = ("TODO: define goal", "<project goal>", "[待填写目标]", "[Fill in goal]")
+        placeholders = ("TODO: define goal", "TODO define goal", "TODO find owner", "TBD choose baseline", "TBD pending review", "TODO clarify scope", "TBD confirm owner", "TODO verify output", "TODO review results", "TODO replace asset", "TODO fix test", "TODO later", "TODO investigate failure", "TBD specify owner", "TODO resolve blocker", "<project goal>", "[待填写目标]", "[Fill in goal]")
         for goal in placeholders:
             with self.subTest(goal=goal), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw); source = self.write_plan(root, plan(goal=goal))
@@ -245,6 +266,20 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             root = Path(raw); source = self.write_plan(root, plan(project_name="TODO app"))
             self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
             self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
+
+    def test_must_read_paths_exist_and_remain_inside_workspace(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            research = root / "research"; status = research / "STATUS.md"; notes = research / "NOTES.md"
+            notes.write_text("Reference notes", encoding="utf-8")
+            original = status.read_text(encoding="utf-8")
+            status.write_text(original.replace("- research/PLAN.md", "- research/PLAN.md\n- research/NOTES.md"), encoding="utf-8")
+            self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
+            status.write_text(original.replace("- research/PLAN.md", "- research/PLAN.md\n- research/MISSING.md"), encoding="utf-8")
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+            status.write_text(original.replace("- research/PLAN.md", "- research/PLAN.md\n- ../outside.md"), encoding="utf-8")
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
 
     def test_unknown_plans_directory_is_not_legacy(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -267,6 +302,55 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             plan_path.write_text(text.replace("# Unicode 研究计划", "# "), encoding="utf-8")
             self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
 
+    def test_status_shape_and_lazy_records_are_strictly_validated(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            research = root / "research"; status = research / "STATUS.md"
+            status.write_text(status.read_text(encoding="utf-8") + "\n## 风险\nCopied plan content\n", encoding="utf-8")
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+            status.write_text(status.read_text(encoding="utf-8").replace("\n## 风险\nCopied plan content\n", "\n"), encoding="utf-8")
+            good = research / "records" / "decisions" / "2026-08-11-ship-it.md"; good.parent.mkdir(parents=True); good.write_text("Decision recorded", encoding="utf-8")
+            self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
+            good.rename(good.with_name("2026-08-11-Bad.md"))
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            records = root / "research" / "records"; (records / "reviews").mkdir(parents=True)
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+            (records / "reviews").rmdir(); (records / "unknown").mkdir()
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+            (records / "unknown").rmdir(); bad = records / "handoffs" / "2026-08-11-next.md"; bad.parent.mkdir(); bad.write_text("TODO define handoff", encoding="utf-8")
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            record = root / "research" / "records" / "retrospectives" / "2026-08-11-template.md"; record.parent.mkdir(parents=True)
+            record.write_text((ROOT / "assets" / "TEMPLATE_retrospective_zh.md").read_text(encoding="utf-8"), encoding="utf-8")
+            self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+            record.write_text("Ordinary {braces} are valid.", encoding="utf-8")
+            self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
+
+    def test_adopt_validates_existing_lazy_records_before_core_writes(self):
+        invalid_builders = (
+            lambda research: (research / "records" / "reviews").mkdir(parents=True),
+            lambda research: (research / "records" / "decisions" / "bad.md").parent.mkdir(parents=True) or (research / "records" / "decisions" / "bad.md").write_text("record", encoding="utf-8"),
+            lambda research: (research / "records" / "handoffs" / "2026-08-11-next.md").parent.mkdir(parents=True) or (research / "records" / "handoffs" / "2026-08-11-next.md").write_text("{{owner}}", encoding="utf-8"),
+        )
+        for build in invalid_builders:
+            with self.subTest(build=build), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw); research = root / "research"; build(research); source = self.write_plan(root)
+                result = self.run_cli(root, "--plan-file", str(source), "--adopt-existing-research-dir", "--json")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(json.loads(result.stdout)["layout"], "unknown")
+                self.assertFalse((research / "PLAN.md").exists()); self.assertFalse((research / "STATUS.md").exists())
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); research = root / "research"; record = research / "records" / "reviews" / "2026-08-11-accepted.md"; record.parent.mkdir(parents=True); record.write_text("Reviewed and accepted.", encoding="utf-8")
+            source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source), "--adopt-existing-research-dir").returncode, 0)
+            self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
+
     def test_force_preserves_status_progress_and_unrelated_records(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw); source = self.write_plan(root)
@@ -278,7 +362,7 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             status_text = status_text.replace("## 必读\n- research/PLAN.md", "## 必读\n- research/PLAN.md\n- research/NOTES.md")
             status.write_text(status_text, encoding="utf-8")
             notes = research / "NOTES.md"; notes.write_text("unchanged", encoding="utf-8")
-            record = research / "records" / "decision.md"; record.parent.mkdir(); record.write_text("record", encoding="utf-8")
+            record = research / "records" / "decisions" / "2026-08-11-record.md"; record.parent.mkdir(parents=True); record.write_text("record", encoding="utf-8")
             source.write_text(json.dumps(plan(next_action="Ship it")), encoding="utf-8")
             self.assertEqual(self.run_cli(root, "--plan-file", str(source), "--force-overwrite").returncode, 0)
             updated = status.read_text(encoding="utf-8")
@@ -315,6 +399,35 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
             status.write_text(status.read_text(encoding="utf-8").replace("current_milestone: M1", "current_milestone: M9"), encoding="utf-8")
             self.assertNotEqual(self.run_cli(root, "--validate-only").returncode, 0)
+
+    def test_force_invalid_payload_reports_existing_v2_layout(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            source.write_text('{"broken": true}', encoding="utf-8")
+            result = self.run_cli(root, "--plan-file", str(source), "--force-overwrite", "--json")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(json.loads(result.stdout)["layout"], "v2")
+
+    def test_cross_validation_uses_milestone_section_and_exact_must_read_line(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            plan_path = root / "research" / "PLAN.md"
+            text = plan_path.read_text(encoding="utf-8")
+            text = text.replace("- M1 - Working CLI (验收: Tests pass)", "No declared milestone")
+            plan_path.write_text(text + "\n- M1 - Forged outside section (验收: x)\n", encoding="utf-8")
+            result = self.run_cli(root, "--validate-only", "--json")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("current_milestone", " ".join(json.loads(result.stdout)["messages"]))
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            status = root / "research" / "STATUS.md"
+            status.write_text(status.read_text(encoding="utf-8").replace("- research/PLAN.md", "- research/PLAN.md.bak"), encoding="utf-8")
+            result = self.run_cli(root, "--validate-only", "--json")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("must_read", " ".join(json.loads(result.stdout)["messages"]))
 
 
 if __name__ == "__main__":
