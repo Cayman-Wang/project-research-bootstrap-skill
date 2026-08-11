@@ -9,10 +9,10 @@ Run the state machine `DISCUSS -> FREEZE -> GENERATE -> MAINTAIN`. Keep discussi
 
 ## Select The State
 
-- Enter `DISCUSS` for a new, ambiguous, or materially changed project. Read-only inspection and research are allowed; do not write workspace files.
+- Enter `DISCUSS` for a new, ambiguous, or materially changed project. Adapt the protocol to the project's boundary: a feature, service, experiment, product, or multi-team program can each need a different amount of detail. Accept context through user-provided background, read-only inspection of user-scoped materials, or user-provided artifacts/links; state which inputs were used and what remains unknown. Read-only inspection and research are allowed; do not write workspace files.
 - Enter `FREEZE` only when the decision set is coherent. Present the complete Discussion Brief and ask for confirmation. Read-only verification is allowed; do not write workspace files.
 - Enter `GENERATE` only after the user explicitly authorizes creating the frozen workspace, for example “生成计划文件”, “initialize the plan workspace”, or “按冻结方案落盘”. Never infer authorization from approval of the brief.
-- For an existing v2 session, begin at `STATUS.md`: it is the sole entrypoint. Read every path named by its `must_read` before answering or acting; read `PLAN.md` when `must_read` names it. A pure read-only status request never writes.
+- For an existing v2 session, begin at `STATUS.md`: it is the sole entrypoint. Read every path named by its `must_read` before answering or acting; read `PLAN.md` when `must_read` names it. Calibrate reported status by separating what STATUS records, easily obtained actual evidence, and unknowns; for a read-only request, report their differences without writing. A pure read-only status request never writes.
 - Enter writable `MAINTAIN` only when the user explicitly requests a status update, decision record, review, retrospective, or handoff; that request authorizes the corresponding write. If the target or scope is unclear, ask before writing. Read STATUS and all of its `must_read` paths first.
 
 Read [references/discussion_protocol_zh.md](references/discussion_protocol_zh.md) before conducting `DISCUSS` or `FREEZE`. Read every applicable lens when shaping a domain: normally exactly one, [references/software_lens_zh.md](references/software_lens_zh.md) for software/product/system work or [references/research_lens_zh.md](references/research_lens_zh.md) for research/experiment work; read both for a mixed research-software or experimental-platform project. Read [references/file_contract_zh.md](references/file_contract_zh.md) before `GENERATE` or `MAINTAIN`.
@@ -29,7 +29,9 @@ After explicit authorization, inspect the target before writing.
 
 ## Maintain Records
 
-Update `STATUS.md` for observed progress, current milestone, next action, blockers, and timestamps only after explicit MAINTAIN intent. Any change to frozen facts, major scope, success criteria or acceptance, selected approach, dependencies, risks, compliance boundaries, or milestones returns to `DISCUSS` and `FREEZE`; show the revised Discussion Brief, obtain re-freeze confirmation, then separately obtain explicit authorization to write the PLAN revision. Keep the previous locked decisions visible in the new brief and identify each changed decision.
+Update only `STATUS.md` for execution order, current action, blockers, observed progress, and timestamps after explicit MAINTAIN intent. A change to the destination—goal, success criteria, scope, locked decisions, milestone acceptance, or key constraints—returns to `DISCUSS` and `FREEZE`; show the revised Discussion Brief, obtain re-freeze confirmation, then separately obtain explicit authorization to write the PLAN revision. Keep the previous locked decisions visible in the new brief and identify each changed decision.
+
+Do not turn planning into implementation: define the implementation handoff—use the frozen PLAN as input to route work to the applicable implementation or research-execution skill, including what is locked, what evidence and acceptance checks are needed, and which decisions remain open—then stop. This skill does not take over execution. A request to inspect, discuss, freeze, or report remains read-only unless it explicitly authorizes the corresponding workspace write.
 
 ## Verify
 
