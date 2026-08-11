@@ -1,305 +1,281 @@
 #!/usr/bin/env python3
-"""Initialize a reusable research workspace skeleton with idempotent behavior."""
-
+"""Create and validate the frozen plan-your-project v2 workspace contract."""
 from __future__ import annotations
-
 import argparse
 import datetime as dt
+import json
 import re
-from dataclasses import dataclass
+import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Any
+
+PLAN_NAME, STATUS_NAME = "PLAN.md", "STATUS.md"
+TOP_KEYS = {"schema_version", "project_name", "problem", "goal", "success_criteria", "scope", "constraints", "selected_approach", "alternatives_considered", "locked_decisions", "milestones", "risks", "assumptions", "open_questions", "evidence", "next_action", "freeze_readiness"}
+OLD_PROMPTS = ("session_start_prompt_zh.md", "session_bootstrap_prompt_zh.md")
+class ContractError(ValueError): pass
+
+def parse_date(value: str) -> str:
+    try: return dt.date.fromisoformat(value).isoformat()
+    except ValueError as exc: raise argparse.ArgumentTypeError("--date must be an ISO date (YYYY-MM-DD)") from exc
+
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(description="Initialize or validate a frozen plan-your-project v2 workspace.")
+    p.add_argument("--workspace-root", required=True, type=Path, help="Workspace containing research/.")
+    p.add_argument("--plan-file", metavar="FILE|-", help="Strict JSON frozen plan input; - reads stdin.")
+    p.add_argument("--language", choices=("zh", "en"), default="zh")
+    p.add_argument("--date", type=parse_date, default=dt.date.today().isoformat(), help="ISO date (YYYY-MM-DD).")
+    p.add_argument("--dry-run", action="store_true"); p.add_argument("--force-overwrite", action="store_true")
+    p.add_argument("--validate-only", action="store_true"); p.add_argument("--adopt-existing-research-dir", action="store_true")
+    p.add_argument("--json", action="store_true"); p.add_argument("--project-slug", help="Deprecated; ignored and does not affect paths.")
+    a=p.parse_args(argv)
+    if not a.validate_only and not a.plan_file: p.error("--plan-file is required unless --validate-only is used")
+    if a.validate_only and a.plan_file: p.error("--plan-file cannot be used with --validate-only")
+    if a.validate_only and a.force_overwrite: p.error("--force-overwrite cannot be used with --validate-only")
+    return a
+
+def valid_text(value: Any, name: str) -> None:
+    if not isinstance(value, str):
+        raise ContractError(f"{name} must be a string")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ContractError(f"{name} must be valid UTF-8 text") from exc
 
 
-@dataclass(frozen=True)
-class WriteResult:
-    path: Path
-    status: str  # created | overwritten | skipped
+def nonempty(value, name):
+    valid_text(value, name)
+    if not value.strip(): raise ContractError(f"{name} must be a non-empty string")
+def string_list(value, name, required=False):
+    if not isinstance(value, list) or (required and not value):
+        raise ContractError(f"{name} must be {'a non-empty ' if required else 'a '}list of non-empty strings")
+    for item in value:
+        nonempty(item, name)
+def exact_object(value, keys, name):
+    if not isinstance(value,dict) or set(value)!=set(keys): raise ContractError(f"{name} must contain exactly: {', '.join(keys)}")
+
+def validate_plan(plan: Any):
+    if not isinstance(plan,dict) or set(plan)!=TOP_KEYS: raise ContractError("plan JSON has missing or unknown top-level keys")
+    if plan["schema_version"] != "2.0": raise ContractError("schema_version must be '2.0'")
+    if plan["freeze_readiness"] not in ("READY", "READY_WITH_ASSUMPTIONS"): raise ContractError("freeze_readiness must be READY or READY_WITH_ASSUMPTIONS")
+    for key in ("project_name","problem","goal","selected_approach","next_action"): nonempty(plan[key], key)
+    for key in ("success_criteria","constraints","locked_decisions","assumptions","open_questions","evidence"):
+        string_list(plan[key], key, key in ("success_criteria","locked_decisions"))
+    exact_object(plan["scope"], ("in","out"), "scope"); string_list(plan["scope"]["in"], "scope.in", True); string_list(plan["scope"]["out"], "scope.out")
+    if not isinstance(plan["alternatives_considered"],list) or not plan["alternatives_considered"]: raise ContractError("alternatives_considered must be a non-empty list")
+    for item in plan["alternatives_considered"]:
+        exact_object(item,("option","tradeoffs"),"alternative"); nonempty(item["option"],"alternative.option"); string_list(item["tradeoffs"],"alternative.tradeoffs")
+    if not isinstance(plan["milestones"],list) or not plan["milestones"]: raise ContractError("milestones must be a non-empty list")
+    ids=[]
+    for item in plan["milestones"]:
+        exact_object(item,("id","outcome","acceptance"),"milestone"); nonempty(item["id"],"milestone.id"); nonempty(item["outcome"],"milestone.outcome"); string_list(item["acceptance"],"milestone.acceptance",True); ids.append(item["id"])
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", item["id"]): raise ContractError("milestone.id has an invalid format")
+    if len(ids)!=len(set(ids)): raise ContractError("milestone.id values must be unique")
+    if not isinstance(plan["risks"],list): raise ContractError("risks must be a list")
+    for item in plan["risks"]:
+        exact_object(item,("risk","mitigation_or_validation"),"risk"); nonempty(item["risk"],"risk.risk"); nonempty(item["mitigation_or_validation"],"risk.mitigation_or_validation")
+    if plan["freeze_readiness"] == "READY_WITH_ASSUMPTIONS" and not plan["assumptions"]:
+        raise ContractError("READY_WITH_ASSUMPTIONS requires at least one assumption")
+
+def load_plan(source):
+    try:
+        if source == "-":
+            raw = sys.stdin.buffer.read().decode("utf-8-sig")
+        else:
+            raw = Path(source).read_text(encoding="utf-8-sig")
+        value = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc: raise ContractError("plan file must contain valid UTF-8 JSON") from exc
+    validate_plan(value); return value
+
+def classify_layout(root):
+    research=root/"research"
+    if not research.exists(): return "empty", []
+    if not research.is_dir(): return "invalid", ["research is not a directory"]
+    plan,status=research/PLAN_NAME,research/STATUS_NAME
+    plans = research / "plans"
+    old = (plans/"ACTIVE_PLAN.md").exists() or any((plans/x).exists() for x in OLD_PROMPTS) or any(plans.glob("*/master_plan_zh.md"))
+    if old and (plan.exists() or status.exists()): return "mixed", ["legacy and v2 files are both present"]
+    if old: return "v1", ["legacy research workspace detected"]
+    if plan.exists() != status.exists(): return "invalid", ["partial v2 workspace: PLAN.md and STATUS.md must both exist"]
+    if plan.exists(): return "v2", []
+    return ("empty",[]) if not any(research.iterdir()) else ("unknown",["unrecognized research directory"])
+
+def bullets(xs, empty="None"): return "\n".join("- "+x for x in xs) if xs else "- " + empty
+def obj_bullets(xs, fmt, empty="None"): return "\n".join("- "+fmt(x) for x in xs) if xs else "- " + empty
+def render_plan(p: dict[str, Any], language: str, date: str, revision: int) -> str:
+    h = {"zh": {"problem":"问题","goal":"目标","success_criteria":"成功标准","scope":"范围","constraints":"约束","selected_approach":"选定方案","alternatives_considered":"备选方案","locked_decisions":"冻结决策","milestones":"里程碑","risks":"风险","assumptions":"假设","open_questions":"开放问题","evidence":"证据","next_action":"下一步"}, "en": {k:k.replace("_"," ").title() for k in TOP_KEYS}}[language]
+    empty = "无" if language == "zh" else "None"
+    in_label, out_label = ("范围内", "范围外") if language == "zh" else ("In", "Out")
+    acceptance = "验收" if language == "zh" else "acceptance"
+    freeze = "冻结就绪度" if language == "zh" else "Freeze Readiness"
+    tradeoffs = "权衡" if language == "zh" else "tradeoffs"
+    mitigation = "缓解或验证" if language == "zh" else "mitigation or validation"
+    out=["---","workspace_format: plan-your-project/v2","record: PLAN",f"plan_revision: {revision}",f"language: {language}",f"frozen_at: {date}","---",f"# {p['project_name']}"]
+    for key in ("problem","goal","selected_approach","next_action"): out += [f"## {h[key]}",p[key]]
+    for key in ("success_criteria","constraints","locked_decisions","assumptions","open_questions","evidence"): out += [f"## {h[key]}",bullets(p[key], empty)]
+    out += [f"## {h['scope']}",f"### {in_label}",bullets(p['scope']['in'], empty),f"### {out_label}",bullets(p['scope']['out'], empty),f"## {h['alternatives_considered']}",obj_bullets(p['alternatives_considered'],lambda x: f"{x['option']} ({tradeoffs}: {'; '.join(x['tradeoffs']) or empty})",empty),f"## {h['milestones']}",obj_bullets(p['milestones'],lambda x: f"{x['id']} - {x['outcome']} ({acceptance}: {'; '.join(x['acceptance'])})",empty),f"## {h['risks']}",obj_bullets(p['risks'],lambda x: f"{x['risk']} ({mitigation}: {x['mitigation_or_validation']})",empty),f"## {freeze}",p['freeze_readiness']]
+    return "\n".join(out[:7])+"\n\n"+"\n\n".join(out[7:])+"\n"
+def render_status(
+    p: dict[str, Any],
+    language: str,
+    date: str,
+    revision: int,
+    preserved: dict[str, Any] | None = None,
+) -> str:
+    heading="状态" if language=="zh" else "Status"
+    next_action, blockers, must_read, empty = ("下一步", "阻塞", "必读", "无") if language == "zh" else ("Next Action", "Blockers", "Must Read", "None")
+    preserved = preserved or {}
+    milestone_ids = {item["id"] for item in p["milestones"]}
+    current = preserved.get("current_milestone")
+    if current not in milestone_ids:
+        current = p["milestones"][0]["id"]
+    state = preserved.get("state", "planned")
+    blocker_text = preserved.get("blockers_body") or f"- {empty}"
+    must_read_text = preserved.get("must_read_body") or "- research/PLAN.md"
+    return f"---\nworkspace_format: plan-your-project/v2\nrecord: STATUS\nplan_revision: {revision}\nstate: {state}\ncurrent_milestone: {current}\nlast_updated: {date}\n---\n\n# {heading}\n\n## {next_action}\n{p['next_action']}\n\n## {blockers}\n{blocker_text}\n\n## {must_read}\n{must_read_text}\n"
+
+def metadata(text):
+    if not text.startswith("---\n"): raise ContractError("missing metadata")
+    end=text.find("\n---\n",4)
+    if end<0: raise ContractError("unterminated metadata")
+    result={}
+    for line in text[4:end].splitlines():
+        if ": " not in line: raise ContractError("invalid metadata")
+        k,v=line.split(": ",1)
+        if k in result: raise ContractError("duplicate metadata")
+        result[k]=v
+    return result, text[end+5:]
 
 
-def normalize_slug(raw: str) -> str:
-    slug = raw.strip().lower()
-    slug = re.sub(r"[^a-z0-9_\-]+", "_", slug)
-    slug = re.sub(r"_+", "_", slug).strip("_")
-    return slug or "project_plan"
+def section_body(body: str, heading: str) -> str | None:
+    match = re.search(
+        rf"(?ms)^## {re.escape(heading)}\s*\n(.*?)(?=^## |\Z)", body
+    )
+    return match.group(1).strip() if match else None
 
 
-def render_research_readme() -> str:
-    return """# Research Workspace Layout
-
-`research/` stores project planning and execution knowledge for reusable collaboration.
-
-## Directory Layout
-- `research/plans/`: active pointer, master plan, milestone plans, session start prompt.
-- `research/guides/`: operation guides and runbooks.
-- `research/reviews/`: audit reports and fix prompts.
-- `research/handoffs/`: session handoff notes.
-- `research/retrospectives/`: milestone retrospectives.
-- `research/artifacts/tmp/`: optional temporary artifacts that can be regenerated.
-
-## Retention Rule
-- Keep runtime outputs outside `research/` (for example `outputs/`).
-- Keep only decision records and reusable process documents in `research/`.
-"""
+def section_items(body: str, heading: str) -> list[str]:
+    content = section_body(body, heading)
+    if content is None:
+        return []
+    return [line[2:].strip() for line in content.splitlines() if line.startswith("- ")]
 
 
-def render_active_plan(slug: str, today: str) -> str:
-    return f"""# ACTIVE_PLAN
-
-goal: [待填写：项目总目标]
-current_milestone: M1 规划阶段（待确认）
-must_read:
-  - research/plans/{slug}/master_plan_zh.md
-locked_decisions:
-  - [待填写：已冻结关键决策]
-next_action: [待填写：下一步可执行动作]
-out_of_scope:
-  - [待填写：本阶段不做内容]
-latest_retrospective: none
-last_updated: {today}
-"""
+def contains_placeholder(text: str) -> bool:
+    patterns = (
+        r"(?im)^\s*(?:[-*]\s*)?(?:TODO|TBD)(?:\s*:.*)?\s*$",
+        r"(?im):\s*(?:TODO|TBD)\s*$",
+        r"<[^>\r\n]+>",
+        r"(?i)\[(?:待填写[^\]]*|fill in[^\]]*)\]",
+    )
+    return any(re.search(pattern, text) for pattern in patterns)
 
 
-def render_master_plan(slug: str, today: str) -> str:
-    return f"""# {slug} 主计划（中文）
-
-- 创建日期：{today}
-- 负责人：[待填写]
-
-## 一、目标
-- [待填写：一句话目标]
-
-## 二、背景与问题定义
-- [待填写：现状、痛点、约束]
-
-## 三、方案总览
-- [待填写：总体方案]
-
-## 四、里程碑
-- M1: [待填写]
-- M2: [待填写]
-- M3: [待填写]
-
-## 五、验收标准
-- [待填写：可验证指标]
-
-## 六、风险与对策
-- [待填写]
-
-## 七、默认假设
-- 默认中文文档
-- 默认按“讨论 -> 冻结 -> 生成”执行
-"""
-
-
-def render_session_start_prompt() -> str:
-    return """# 新对话启动模板（跨平台通用）
-
-> 用法：新建任意 AI 对话后，把本文件内容整体粘贴为第一条消息，再补你的具体任务。
-
-```text
-请先读取以下计划文件，再回答我的问题：
-
-workspace_path=<workspace_path>
-main_plan=<main_plan>
-active_plan=<active_plan>
-
-执行顺序要求：
-1) 先读取 active_plan。
-2) 再读取 main_plan。
-3) 再按 active_plan 中 must_read 列表读取其余必读文件。
-
-在你的第一条回复中，先输出 Intent Digest（三行）：
-Goal: <从计划中提炼的一句话目标>
-Current Milestone: <当前里程碑>
-Next Action: <下一步可执行动作>
-
-如果任何必读文件缺失、路径无效或计划冲突，请先明确报错并给出修复建议，不要直接开始实现。
-```
-"""
-
-
-def render_simple_readme(title: str, bullets: List[str]) -> str:
-    lines = [f"# {title}", ""]
-    for bullet in bullets:
-        lines.append(f"- {bullet}")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def render_retrospective_readme(slug: str) -> str:
-    return f"""# {slug} 阶段复盘索引
-
-本目录用于存放里程碑复盘文档（论文素材/工程复盘）。
-
-## 索引
-| Milestone | Date | File | Status |
-| --- | --- | --- | --- |
-| M1 | - | - | Pending |
-
-## 固定结构（每篇复盘必须包含）
-1. 问题
-2. 思路
-3. 实现
-4. 验证
-5. 局限
-6. 下一步
-7. 借鉴关系与实现边界
-"""
-
-
-def render_retrospective_template() -> str:
-    return """# YYYY-MM-DD_mX_retrospective_zh
-
-- 日期：YYYY-MM-DD
-- 里程碑：MX
-- 对应主计划：[master_plan_zh.md](../../plans/<project_slug>/master_plan_zh.md)
-
-## 1. 问题
-- [待填写]
-
-## 2. 思路
-- [待填写]
-
-## 3. 实现
-- [待填写]
-
-## 4. 验证
-- [待填写]
-
-## 5. 局限
-- [待填写]
-
-## 6. 下一步
-- [待填写]
-
-## 7. 借鉴关系与实现边界
-### 7.1 借鉴层级
-- [待填写]
-
-### 7.2 来源映射表
-| 借鉴来源 | 借鉴到的思路 | 本项目落点 | 当前状态 |
-| --- | --- | --- | --- |
-| [待填写] | [待填写] | [待填写] | [待填写] |
-
-### 7.3 独立实现证据
-- [待填写]
-"""
-
-
-def write_file(path: Path, content: str, force: bool, dry_run: bool) -> WriteResult:
-    if path.exists() and not force:
-        return WriteResult(path=path, status="skipped")
-
-    status = "overwritten" if path.exists() else "created"
-    if not dry_run:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-    return WriteResult(path=path, status=status)
-
-
-def touch_file(path: Path, force: bool, dry_run: bool) -> WriteResult:
-    if path.exists() and not force:
-        return WriteResult(path=path, status="skipped")
-
-    status = "overwritten" if path.exists() else "created"
-    if not dry_run:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("", encoding="utf-8")
-    return WriteResult(path=path, status=status)
-
-
-def build_file_map(root: Path, slug: str, today: str) -> Dict[Path, str]:
+def read_preserved_status(root: Path, language: str) -> dict[str, Any]:
+    text = (root / "research" / STATUS_NAME).read_text(encoding="utf-8")
+    status_meta, body = metadata(text)
+    blockers = "阻塞" if language == "zh" else "Blockers"
+    must_read = "必读" if language == "zh" else "Must Read"
     return {
-        root / "research" / "README.md": render_research_readme(),
-        root / "research" / "plans" / "ACTIVE_PLAN.md": render_active_plan(slug, today),
-        root / "research" / "plans" / slug / "master_plan_zh.md": render_master_plan(slug, today),
-        root / "research" / "plans" / "session_start_prompt_zh.md": render_session_start_prompt(),
-        root / "research" / "guides" / "README.md": render_simple_readme(
-            "Guides", ["放置运行指南、操作手册、参数说明。"]
-        ),
-        root / "research" / "reviews" / "README.md": render_simple_readme(
-            "Reviews", ["放置审查报告、修复提示词、审计结论。"]
-        ),
-        root / "research" / "handoffs" / "README.md": render_simple_readme(
-            "Handoffs", ["放置跨会话交接文档。"]
-        ),
-        root / "research" / "retrospectives" / slug / "README.md": render_retrospective_readme(slug),
-        root
-        / "research"
-        / "retrospectives"
-        / slug
-        / "TEMPLATE_retrospective_zh.md": render_retrospective_template(),
+        "state": status_meta["state"],
+        "current_milestone": status_meta["current_milestone"],
+        "blockers_body": section_body(body, blockers),
+        "must_read_body": section_body(body, must_read),
     }
+def valid_iso_date(value: str) -> bool:
+    try:
+        dt.date.fromisoformat(value)
+        return True
+    except (TypeError, ValueError):
+        return False
 
+def validate_v2(root: Path) -> list[str]:
+    research=root/"research"; plan_path,status_path=research/PLAN_NAME,research/STATUS_NAME; errors=[]
+    try: pm,pt=metadata(plan_path.read_text(encoding="utf-8")); sm,st=metadata(status_path.read_text(encoding="utf-8"))
+    except (OSError,UnicodeError,ContractError) as exc: return [str(exc)]
+    plan_revision = pm.get("plan_revision", "")
+    revision_ok = plan_revision.isdecimal() and int(plan_revision) >= 1
+    if set(pm)!={"workspace_format","record","plan_revision","language","frozen_at"} or pm.get("workspace_format")!="plan-your-project/v2" or pm.get("record")!="PLAN" or not revision_ok or pm.get("language") not in ("zh","en") or not valid_iso_date(pm.get("frozen_at", "")): errors.append("PLAN metadata is invalid")
+    if set(sm)!={"workspace_format","record","plan_revision","state","current_milestone","last_updated"} or sm.get("workspace_format")!="plan-your-project/v2" or sm.get("record")!="STATUS" or sm.get("plan_revision")!=plan_revision or sm.get("state") not in ("planned","in_progress","blocked","complete") or not valid_iso_date(sm.get("last_updated", "")): errors.append("STATUS metadata is invalid")
+    milestones=[]
+    for line in pt.splitlines():
+        if line.startswith("- ") and " - " in line and ("(acceptance:" in line or "(验收:" in line): milestones.append(line[2:].split(" - ",1)[0])
+    if sm.get("current_milestone") not in milestones: errors.append("STATUS current_milestone is absent from PLAN")
+    if "- research/PLAN.md" not in st: errors.append("STATUS must_read must include research/PLAN.md")
+    if any(x in st for x in ("## Goal","## 目标","## Scope","## 范围","## Decisions","## 冻结决策")): errors.append("STATUS duplicates plan content")
+    language = pm.get("language")
+    plan_sections = {
+        "zh": ("问题", "目标", "选定方案", "下一步", "成功标准", "约束", "冻结决策", "假设", "开放问题", "证据", "范围", "备选方案", "里程碑", "风险", "冻结就绪度"),
+        "en": ("Problem", "Goal", "Selected Approach", "Next Action", "Success Criteria", "Constraints", "Locked Decisions", "Assumptions", "Open Questions", "Evidence", "Scope", "Alternatives Considered", "Milestones", "Risks", "Freeze Readiness"),
+    }
+    status_sections = {
+        "zh": ("下一步", "阻塞", "必读"),
+        "en": ("Next Action", "Blockers", "Must Read"),
+    }
+    if language in plan_sections:
+        if any(not section_body(pt, heading) for heading in plan_sections[language]):
+            errors.append("PLAN body lacks required sections")
+        if any(not section_body(st, heading) for heading in status_sections[language]):
+            errors.append("STATUS body lacks required sections")
+    if not re.search(r"(?m)^# \S.*$", pt):
+        errors.append("PLAN body lacks a non-empty project title")
+    if contains_placeholder(pt + "\n" + st):
+        errors.append("workspace contains an unresolved placeholder")
+    return errors
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Initialize a reusable research workspace skeleton."
-    )
-    parser.add_argument(
-        "--workspace-root",
-        type=Path,
-        default=Path.cwd(),
-        help="Target workspace root directory.",
-    )
-    parser.add_argument(
-        "--project-slug",
-        type=str,
-        required=True,
-        help="Project slug used under research/plans and research/retrospectives.",
-    )
-    parser.add_argument(
-        "--date",
-        type=str,
-        default=dt.date.today().isoformat(),
-        help="Date string used in template metadata (YYYY-MM-DD).",
-    )
-    parser.add_argument(
-        "--force-overwrite",
-        action="store_true",
-        help="Overwrite existing files instead of skipping them.",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print planned changes without writing files.",
-    )
-    return parser.parse_args()
+def validate_v1(root: Path) -> list[str]:
+    research = root / "research"
+    active = research / "plans" / "ACTIVE_PLAN.md"
+    required = ("goal", "current_milestone", "must_read", "locked_decisions", "next_action", "out_of_scope", "latest_retrospective", "last_updated")
+    errors = []
+    if not (research / "README.md").is_file(): errors.append("missing research/README.md")
+    if not active.is_file(): errors.append("missing plans/ACTIVE_PLAN.md")
+    elif any(not any(line.startswith(key + ":") for line in active.read_text(encoding="utf-8").splitlines()) for key in required): errors.append("ACTIVE_PLAN.md lacks required keys")
+    plans = research / "plans"
+    if not any(plans.glob("*/master_plan_zh.md")): errors.append("missing master_plan_zh.md")
+    if not any((plans / name).is_file() for name in OLD_PROMPTS): errors.append("missing session prompt")
+    retrospectives = research / "retrospectives"
+    if not any(retrospectives.glob("*/README.md")) or not any(retrospectives.glob("*/TEMPLATE_retrospective_zh.md")): errors.append("missing retrospective files")
+    return errors
 
+def emit(args, layout, status, messages, actions=None):
+    actions=actions or []; payload={"layout":layout,"status":status,"messages":messages,"created":[x for x in actions if x.startswith("create ")],"skipped":[x for x in actions if x.startswith("skip ")],"overwritten":[x for x in actions if x.startswith("overwrite ")]}; payload["counts"]={k:len(payload[k]) for k in ("created","skipped","overwritten")}
+    print(json.dumps(payload,ensure_ascii=False,sort_keys=True) if args.json else f"layout: {layout}\nstatus: {status}\n"+"\n".join("- "+x for x in messages+actions))
 
-def main() -> int:
-    args = parse_args()
-    workspace_root = args.workspace_root.resolve()
-    slug = normalize_slug(args.project_slug)
-    today = args.date
-
-    file_map = build_file_map(workspace_root, slug, today)
-    results: List[WriteResult] = []
-
-    for path, content in file_map.items():
-        results.append(write_file(path, content, args.force_overwrite, args.dry_run))
-
-    gitkeep_path = workspace_root / "research" / "artifacts" / "tmp" / ".gitkeep"
-    results.append(touch_file(gitkeep_path, args.force_overwrite, args.dry_run))
-
-    created = sum(1 for r in results if r.status == "created")
-    overwritten = sum(1 for r in results if r.status == "overwritten")
-    skipped = sum(1 for r in results if r.status == "skipped")
-
-    print("Research workspace initialization complete")
-    print(f"- workspace_root: {workspace_root}")
-    print(f"- project_slug: {slug}")
-    print(f"- dry_run: {args.dry_run}")
-    print(f"- created: {created}")
-    print(f"- overwritten: {overwritten}")
-    print(f"- skipped: {skipped}")
-
-    for result in results:
-        print(f"  [{result.status}] {result.path}")
-
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+def main(argv=None):
+    try:
+        args=parse_args(argv); root=args.workspace_root.resolve()
+        if args.project_slug: print("warning: --project-slug is deprecated and ignored",file=sys.stderr)
+        layout,messages=classify_layout(root)
+        if args.validate_only:
+            if layout=="v1":
+                errors = validate_v1(root)
+                emit(args, layout, "valid" if not errors else "invalid", messages + ["legacy workspace: read-only"] + errors)
+                return 0 if not errors else 1
+            errors=validate_v2(root) if layout=="v2" else messages or [f"workspace layout is {layout}, not v2"]
+            emit(args,layout,"valid" if not errors else "invalid",errors); return 0 if not errors else 1
+        if layout in ("v1","mixed","invalid") or (layout=="unknown" and not args.adopt_existing_research_dir): emit(args,layout,"refused",messages or ["use --adopt-existing-research-dir"]); return 1
+        if layout=="v2" and validate_v2(root): emit(args,layout,"refused",["existing v2 workspace is invalid; refusing writes"]); return 1
+        if args.force_overwrite and layout!="v2": emit(args,layout,"refused",["--force-overwrite is only valid for an existing valid v2 workspace"]); return 1
+        revision = 1
+        preserved = None
+        if layout == "v2" and args.force_overwrite:
+            current, _ = metadata((root / "research" / PLAN_NAME).read_text(encoding="utf-8"))
+            revision = int(current["plan_revision"]) + 1
+            preserved = read_preserved_status(root, current["language"])
+        p=load_plan(args.plan_file); files={root/"research"/PLAN_NAME:render_plan(p,args.language,args.date,revision),root/"research"/STATUS_NAME:render_status(p,args.language,args.date,revision,preserved)}; actions=[]
+        try:
+            for content in files.values():
+                content.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ContractError("generated workspace content must be valid UTF-8") from exc
+        if any(contains_placeholder(content) for content in files.values()):
+            raise ContractError("generated workspace content contains an unresolved placeholder")
+        for path,content in files.items():
+            action="overwrite" if path.exists() and args.force_overwrite else "skip" if path.exists() else "create"; actions.append(f"{action} {path.relative_to(root)}")
+            if action!="skip" and not args.dry_run: path.parent.mkdir(parents=True,exist_ok=True); path.write_text(content,encoding="utf-8")
+        emit(args,layout,"dry-run" if args.dry_run else "initialized",[],actions); return 0
+    except ContractError as exc:
+        try: emit(args, "invalid", "invalid", [str(exc)])
+        except UnboundLocalError: print(f"error: {exc}",file=sys.stderr)
+        return 1
+if __name__=="__main__": raise SystemExit(main())
