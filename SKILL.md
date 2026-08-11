@@ -1,91 +1,36 @@
 ---
 name: plan-your-project
-description: "Plan a software or research project through DISCUSS, FREEZE, and GENERATE phases, and initialize the research workspace only after an explicit generate trigger."
+description: Plan and maintain software or research projects with a decision-first DISCUSS, FREEZE, GENERATE, and MAINTAIN protocol. Use for project discovery, research or engineering scoping, plan tradeoffs and milestones, freezing or generating a minimal planning workspace, reporting or explicitly updating project status, and requested decision, review, retrospective, or handoff records. Do not use for immediate coding fixes, one-off implementation with settled scope, or generic scaffolding without planning.
 ---
 
 # Plan Your Project
 
-## Overview
-Build and maintain a standardized `research/` workspace for project planning, reviews, handoffs, and milestone retrospectives.
-Run a strict three-phase protocol: `DISCUSS -> FREEZE -> GENERATE`.
+Run the state machine `DISCUSS -> FREEZE -> GENERATE -> MAINTAIN`. Keep discussion and workspace records separate: discussion is conversational; records exist only after explicit authorization.
 
-## Run Phase Protocol
-1. Enter `DISCUSS` when the user starts a new project or asks for planning support.
-- Clarify goal, milestones, success criteria, constraints, and out-of-scope.
-- Do not create or edit files.
+## Select The State
 
-2. Enter `FREEZE` after the user confirms the plan direction.
-- Output a compact frozen summary containing:
-  - `Goal`
-  - `Milestones`
-  - `Next Action`
-  - `Out of Scope`
-- Do not create or edit files.
+- Enter `DISCUSS` for a new, ambiguous, or materially changed project. Read-only inspection and research are allowed; do not write workspace files.
+- Enter `FREEZE` only when the decision set is coherent. Present the complete Discussion Brief and ask for confirmation. Read-only verification is allowed; do not write workspace files.
+- Enter `GENERATE` only after the user explicitly authorizes creating the frozen workspace, for example “生成计划文件”, “initialize the plan workspace”, or “按冻结方案落盘”. Never infer authorization from approval of the brief.
+- When asked only for current status, read `PLAN.md` and `STATUS.md`, report the answer, and do not write.
+- Enter writable `MAINTAIN` only when the user explicitly requests a status update, decision record, review, retrospective, or handoff. Read the two core records first.
 
-3. Enter `GENERATE` only after explicit trigger phrases from the user.
-- Accept triggers such as:
-  - `开始初始化 research 工作区`
-  - `按冻结方案生成 research 目录`
-  - `落盘 research 工作区`
-- Create files only in this phase.
+Read [references/discussion_protocol_zh.md](references/discussion_protocol_zh.md) before conducting `DISCUSS` or `FREEZE`. Read exactly one lens when shaping a domain: [references/software_lens_zh.md](references/software_lens_zh.md) for software/product/system work, or [references/research_lens_zh.md](references/research_lens_zh.md) for research/experiment work. Read [references/file_contract_zh.md](references/file_contract_zh.md) before `GENERATE` or `MAINTAIN`.
 
-## Generate Workspace Skeleton
-Run the deterministic workspace initialization script:
+## Generate The Minimal Workspace
 
-```bash
-python scripts/init_research_workspace.py \
-  --workspace-root <workspace_root> \
-  --project-slug <project_slug>
-```
+After explicit authorization, inspect the target before writing.
 
-Legacy compatibility:
+- Create only `research/PLAN.md` and `research/STATUS.md` by default, using the strict payload in the file contract.
+- Create a lazy record only when explicitly requested, at the dated slug path defined by the file contract; create only that record. Copy a retrospective template only for a requested retrospective. Do not create indexes, prompts, guides, placeholders, or unrelated record directories.
+- Treat a workspace containing v1 paths or a mixture of v1 and v2 records as read-only. Report the detected layout and refuse to write; v2 does not provide migration.
+- Preserve existing v2 files unless the user explicitly authorizes the requested maintenance change. Do not overwrite a frozen PLAN merely to update progress.
+- Use `scripts/init_research_workspace.py` as the v2 GENERATE entrypoint with its strict JSON `--plan-file` input. Use `scripts/bootstrap_research_workspace.py` only for deprecated compatibility; it is not a v2 entrypoint.
 
-```bash
-python scripts/bootstrap_research_workspace.py \
-  --workspace-root <workspace_root> \
-  --project-slug <project_slug>
-```
+## Maintain Records
 
-Optional flags:
+Update `STATUS.md` for observed progress, current milestone, next action, blockers, and timestamps only after explicit maintenance intent. For a major direction change, return to `DISCUSS` and `FREEZE`; show the revised Discussion Brief, obtain re-freeze confirmation, then separately obtain explicit authorization to write the PLAN revision. Keep the previous locked decisions visible in the new brief and identify each changed decision.
 
-```bash
---dry-run
---force-overwrite
---date YYYY-MM-DD
-```
+## Verify
 
-## Enforce Idempotency and Safety
-- Preserve existing files by default; fill missing files only.
-- Overwrite existing files only when explicitly requested and `--force-overwrite` is set.
-- Keep runtime artifacts out of `research/`; store them in project runtime output paths.
-- Use Chinese markdown defaults (`*_zh.md`) unless the user requests another language.
-
-## Required Skeleton Outputs
-Create or ensure the following paths:
-- `research/README.md`
-- `research/plans/ACTIVE_PLAN.md`
-- `research/plans/<project_slug>/master_plan_zh.md`
-- `research/plans/session_start_prompt_zh.md`
-- `research/guides/README.md`
-- `research/reviews/README.md`
-- `research/handoffs/README.md`
-- `research/retrospectives/<project_slug>/README.md`
-- `research/retrospectives/<project_slug>/TEMPLATE_retrospective_zh.md`
-- `research/artifacts/tmp/.gitkeep`
-
-## Verify After Generation
-1. Confirm all required paths exist.
-2. Report `created` vs `skipped` counts.
-3. Confirm `ACTIVE_PLAN.md` contains required keys:
-- `goal`
-- `current_milestone`
-- `must_read`
-- `locked_decisions`
-- `next_action`
-- `out_of_scope`
-- `latest_retrospective`
-- `last_updated`
-
-## References
-- Read [references/workflow_zh.md](references/workflow_zh.md) for phase definitions and trigger policy.
-- Read [references/file_contract_zh.md](references/file_contract_zh.md) for file contract and acceptance checklist.
+After a permitted write, verify that exactly the authorized v2 records were created or changed, both payloads satisfy the contract, STATUS links to PLAN, both records use the same plan revision, and STATUS names a PLAN milestone. Report created, updated, and skipped paths plus any authorization or layout boundary encountered.
