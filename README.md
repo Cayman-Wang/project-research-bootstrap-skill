@@ -37,7 +37,9 @@ git clone https://github.com/Cayman-Wang/plan-your-project-skill.git \
   ~/.codex/skills/plan-your-project
 ```
 
-The default branch installs from `main`. The v2 workflow will be available from `main` once the `v2.0.0` release changes are merged; until then, propose development work through a pull request rather than treating it as an installed v2 release.
+The default branch installs from `main`. It includes the v2 planning workflow and the v2.1 discussion enhancements: boundary-aware discovery, stronger deep-review challenges, and sharper software and research lenses.
+
+Algorithm projects can also use a user-specified local paper directory for selective, evidence-aware planning.
 
 安装后重启或新建 Codex 任务，再使用 `$plan-your-project` 开始项目规划。
 
