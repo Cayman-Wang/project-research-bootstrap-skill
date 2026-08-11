@@ -4,8 +4,10 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +15,85 @@ PLAN_NAME, STATUS_NAME = "PLAN.md", "STATUS.md"
 TOP_KEYS = {"schema_version", "project_name", "problem", "goal", "success_criteria", "scope", "constraints", "selected_approach", "alternatives_considered", "locked_decisions", "milestones", "risks", "assumptions", "open_questions", "evidence", "next_action", "freeze_readiness"}
 OLD_PROMPTS = ("session_start_prompt_zh.md", "session_bootstrap_prompt_zh.md")
 class ContractError(ValueError): pass
+
+
+def _replace(source: Path, destination: Path) -> None:
+    """Small indirection keeps paired-file commit failure testable."""
+    source.replace(destination)
+
+
+def _unlink(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def commit_core_files(files: dict[Path, str], overwrite: bool) -> None:
+    """Commit PLAN and STATUS together, rolling both back after a failed commit."""
+    paths = list(files)
+    staged: dict[Path, Path] = {}
+    backups: dict[Path, Path] = {}
+    committed: set[Path] = set()
+    retain_backups = False
+    try:
+        for path, content in files.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, raw = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+            temp = Path(raw)
+            staged[path] = temp
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+
+        if overwrite:
+            for path in paths:
+                fd, raw = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".bak", dir=path.parent)
+                os.close(fd)
+                backup = Path(raw)
+                _unlink(backup)
+                backups[path] = backup
+                _replace(path, backup)
+
+        for path in paths:
+            _replace(staged[path], path)
+            committed.add(path)
+    except OSError as exc:
+        if overwrite:
+            rollback_errors = []
+            for path in paths:
+                backup = backups.get(path)
+                if backup is not None and backup.exists():
+                    try:
+                        _replace(backup, path)
+                    except OSError as rollback_exc:
+                        rollback_errors.append(f"{path}: {rollback_exc}")
+            if rollback_errors:
+                retained = [str(backup) for backup in backups.values() if backup.exists()]
+                retain_backups = True
+                retained_text = ", ".join(retained) if retained else "none"
+                raise ContractError(
+                    "core workspace commit failed and rollback failed: "
+                    + "; ".join(rollback_errors)
+                    + f"; retained backups: {retained_text}"
+                ) from exc
+        else:
+            try:
+                for path in committed:
+                    _unlink(path)
+            except OSError as rollback_exc:
+                raise ContractError(f"core workspace commit failed and rollback failed: {rollback_exc}") from exc
+        raise ContractError(f"core workspace commit failed: {exc}") from exc
+    finally:
+        cleanup = tuple(staged.values())
+        if not retain_backups:
+            cleanup += tuple(backups.values())
+        for path in cleanup:
+            try:
+                _unlink(path)
+            except OSError:
+                pass
 
 def parse_date(value: str) -> str:
     if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
@@ -396,11 +477,13 @@ def main(argv=None):
         rendered_errors = validate_v2_content(files[root/"research"/PLAN_NAME], files[root/"research"/STATUS_NAME])
         if rendered_errors:
             raise ContractError("generated workspace violates contract: " + "; ".join(rendered_errors))
-        for path,content in files.items():
-            action="overwrite" if path.exists() and args.force_overwrite else "skip" if path.exists() else "create"; actions.append(f"{action} {path.relative_to(root)}")
-            if action!="skip" and not args.dry_run: path.parent.mkdir(parents=True,exist_ok=True); path.write_text(content,encoding="utf-8")
+        for path in files:
+            action="overwrite" if path.exists() and args.force_overwrite else "skip" if path.exists() else "create"
+            actions.append(f"{action} {path.relative_to(root)}")
+        if not args.dry_run and not all(action.startswith("skip ") for action in actions):
+            commit_core_files(files, args.force_overwrite)
         emit(args,layout,"dry-run" if args.dry_run else "initialized",[],actions); return 0
-    except ContractError as exc:
+    except (ContractError, OSError) as exc:
         try: emit(args, layout if "layout" in locals() else "invalid", "invalid", [str(exc)])
         except UnboundLocalError: print(f"error: {exc}",file=sys.stderr)
         return 1

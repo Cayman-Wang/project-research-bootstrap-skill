@@ -1,27 +1,33 @@
 # Plan Your Project
 
-`plan-your-project` is a Codex skill for planning and maintaining software or research projects that need explicit tradeoffs, milestones, and a durable handoff.
+`plan-your-project` is a Codex skill for planning and maintaining software or research projects with explicit tradeoffs, milestones, and durable handoffs.
 
-`plan-your-project` 是一个 Codex Skill，用于需要明确方案取舍、里程碑和长期交接的软件或科研项目。
+`plan-your-project` 是一个 Codex Skill，用于规划和维护需要明确方案取舍、里程碑和长期交接的软件或科研项目。
 
 ## Workflow / 工作流
 
-- **DISCUSS**: adaptively explore the goal, evidence, constraints, alternatives, risks, and milestone boundaries. No files are written.
-- **FREEZE**: turn the agreed direction into a concise, reviewable plan. No files are written.
-- **GENERATE**: only after an explicit user request, create the durable planning baseline.
-- **MAINTAIN**: an explicit request to update status or create a decision, review, retrospective, or handoff authorizes that corresponding write. Ask when its target or scope is unclear. A pure status question is read-only; a PLAN revision still needs re-freeze confirmation followed by separate write authorization.
+- **DISCUSS**: explore the goal, evidence, constraints, alternatives, risks, and milestone boundaries. No workspace files are written.
+- **FREEZE**: turn the agreed direction into a concise, reviewable plan. No workspace files are written.
+- **GENERATE**: create the durable planning baseline only after explicit user authorization.
+- **MAINTAIN**: only after an explicit request, update status or create the requested decision, review, retrospective, or handoff record. A revised plan returns to DISCUSS and FREEZE before a separately authorized write.
 
-默认生成的基线只有：
+正式的状态、授权和维护行为以 [SKILL.md](SKILL.md) 为准；生成文件、输入与校验契约以 [references/file_contract_zh.md](references/file_contract_zh.md) 为准。
+
+## Workspace / 工作区
+
+The default baseline contains only two files:
 
 ```text
 research/
-├── PLAN.md      # long-lived goal, decisions, milestones, and acceptance criteria
+├── PLAN.md      # frozen goal, decisions, milestones, and acceptance criteria
 └── STATUS.md    # current milestone, next action, blockers, and required reading
 ```
 
-For an existing v2 workspace, `STATUS.md` is the only entrypoint: read it first, then read every path listed in `must_read`. Additional records are created lazily in `research/records/{decisions,reviews,retrospectives,handoffs}` only on an explicit request; no empty kind directories, READMEs, indexes, or placeholder files are created. Runtime outputs belong in the project's normal output locations, not in `research/`.
+For an existing v2 workspace, start with `STATUS.md`, then read every path in `must_read`. Additional records are created only when explicitly requested under `research/records/{decisions,reviews,retrospectives,handoffs}`. No empty record directories, indexes, or placeholders are created.
 
-额外记录按需写入 `research/records/{decisions,reviews,retrospectives,handoffs}`，不预先生成固定目录树；运行产物应留在项目的常规输出目录，而不是 `research/`。
+Runtime outputs belong in the project's normal output locations, not in `research`. 运行产物应留在项目的常规输出目录，而不是 `research/`。
+
+v2 工作区从 `STATUS.md` 开始；再读取 `must_read` 中列出的所有路径。决策、评审、复盘和交接记录只在明确请求时按需创建；不会预建空目录、索引或占位文件。
 
 ## Install / 安装
 
@@ -31,15 +37,13 @@ git clone https://github.com/Cayman-Wang/plan-your-project-skill.git \
   ~/.codex/skills/plan-your-project
 ```
 
-The default branch installs from `main`. The v2 workflow is installed from `main` only after the `v2.0.0` release changes have been merged; until then, development work should be proposed through a pull request rather than presented as an installed v2 release.
-
-Restart or open a new Codex task after installation, then invoke `$plan-your-project` for a project-planning conversation.
+The default branch installs from `main`. The v2 workflow will be available from `main` once the `v2.0.0` release changes are merged; until then, propose development work through a pull request rather than treating it as an installed v2 release.
 
 安装后重启或新建 Codex 任务，再使用 `$plan-your-project` 开始项目规划。
 
 ## CLI / 命令行
 
-The v2 initializer requires a workspace root and a plan-file source:
+The v2 initializer requires a workspace root and a frozen plan payload:
 
 ```bash
 python scripts/init_research_workspace.py \
@@ -47,36 +51,14 @@ python scripts/init_research_workspace.py \
   --plan-file <FILE|->
 ```
 
-`--plan-file -` reads the frozen plan from standard input. Optional parameters are `--language zh|en`, `--date YYYY-MM-DD`, `--dry-run`, `--force-overwrite`, `--validate-only`, `--adopt-existing-research-dir`, and `--json`. `--validate-only` validates an existing workspace without requiring `--plan-file`.
-
-`--plan-file` must contain strict JSON with exactly these 17 top-level keys and types:
-
-```json
-{
-  "schema_version": "2.0",
-  "project_name": "Example", "problem": "Manual triage is slow", "goal": "Reduce triage time",
-  "success_criteria": ["Median time under 5 minutes"],
-  "scope": {"in": ["Triage workflow"], "out": ["Ticket migration"]},
-  "constraints": ["Use existing data"], "selected_approach": "Rank candidate owners",
-  "alternatives_considered": [{"option": "Rules only", "tradeoffs": ["Lower recall"]}],
-  "locked_decisions": ["Human approval remains required"],
-  "milestones": [{"id": "M1", "outcome": "Baseline measured", "acceptance": ["Report reviewed"]}],
-  "risks": [{"risk": "Sparse labels", "mitigation_or_validation": "Measure coverage"}],
-  "assumptions": ["Owners are identifiable"], "open_questions": ["What is the SLA?"],
-  "evidence": ["Triage sample"], "next_action": "Measure baseline", "freeze_readiness": "READY"
-}
-```
-
-Every payload string is a non-empty single line. The parser rejects duplicate keys. `alternatives_considered` options must be unique and must each differ from `selected_approach`; dates use exactly `YYYY-MM-DD`.
-
-Use `--dry-run` to preview changes. After re-freeze and separate write authorization, `--force-overwrite` advances a valid v2 workspace to the next plan revision. It preserves still-valid dynamic `STATUS` values for `state`, `current_milestone`, `blockers`, and `must_read`, while `next_action` comes from the new payload; if the prior milestone no longer exists, STATUS returns to the new plan's first milestone. On a v1 workspace, `--validate-only` performs a read-only legacy check and does not migrate or rewrite it.
+`--plan-file` is the strictly validated frozen payload; use `-` to read it from standard input. Use `--help` for available options, including `--validate-only` and `--dry-run`; see the [file contract](references/file_contract_zh.md) for the payload schema, validation rules, and workspace behavior.
 
 ## v2.0.0 Breaking Changes / 破坏性变更
 
-- The default contract is now `research/PLAN.md` and `research/STATUS.md`, replacing the v1 fixed multi-directory layout.
-- Planning records are lazy rather than a required set of scaffolded files.
+- The default contract is `research/PLAN.md` and `research/STATUS.md`, replacing the v1 fixed multi-directory layout.
+- Planning records are lazy rather than scaffolded as a required file set.
 - v1 workspaces remain readable. v2 does not promise automatic migration or rewrite existing v1 workspaces.
-- `scripts/bootstrap_research_workspace.py` is deprecated and delegates to the v2 initializer. Use `--workspace-root` and `--plan-file`; the legacy `--project-slug` parameter is ignored with a warning.
+- `scripts/bootstrap_research_workspace.py` is deprecated compatibility support. Use `scripts/init_research_workspace.py` with `--workspace-root` and `--plan-file` for v2.
 
 ## License
 

@@ -1,14 +1,20 @@
 import json
+import importlib.util
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "init_research_workspace.py"
 BOOTSTRAP = ROOT / "scripts" / "bootstrap_research_workspace.py"
+SPEC = importlib.util.spec_from_file_location("init_research_workspace", SCRIPT)
+INIT = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(INIT)
 
 
 def plan(**changes):
@@ -130,6 +136,82 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertIn("changed", current)
             self.assertIn("plan_revision: 2", current)
             self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
+
+    def test_initial_commit_failure_leaves_no_core_files_or_temps(self):
+        with tempfile.TemporaryDirectory() as raw:
+            research = Path(raw) / "research"
+            files = {
+                research / "PLAN.md": "new plan\n",
+                research / "STATUS.md": "new status\n",
+            }
+            original_replace = INIT._replace
+
+            def fail_status_commit(source, destination):
+                if source.suffix == ".tmp" and destination.name == "STATUS.md":
+                    raise OSError("injected STATUS commit failure")
+                original_replace(source, destination)
+
+            with mock.patch.object(INIT, "_replace", side_effect=fail_status_commit):
+                with self.assertRaises(INIT.ContractError):
+                    INIT.commit_core_files(files, overwrite=False)
+            self.assertFalse((research / "PLAN.md").exists())
+            self.assertFalse((research / "STATUS.md").exists())
+            self.assertEqual(list(research.glob(".*.tmp")), [])
+            self.assertEqual(list(research.glob(".*.bak")), [])
+
+    def test_force_second_commit_failure_restores_original_core_bytes_and_revision(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            research = root / "research"
+            plan_path, status_path = research / "PLAN.md", research / "STATUS.md"
+            before_plan, before_status = plan_path.read_bytes(), status_path.read_bytes()
+            before_revision = INIT.metadata(before_plan.decode("utf-8"))[0]["plan_revision"]
+            files = {plan_path: "replacement plan\n", status_path: "replacement status\n"}
+            original_replace = INIT._replace
+
+            def fail_status_commit(source, destination):
+                if source.suffix == ".tmp" and destination == status_path:
+                    raise OSError("injected STATUS commit failure")
+                original_replace(source, destination)
+
+            with mock.patch.object(INIT, "_replace", side_effect=fail_status_commit):
+                with self.assertRaises(INIT.ContractError):
+                    INIT.commit_core_files(files, overwrite=True)
+            self.assertEqual(plan_path.read_bytes(), before_plan)
+            self.assertEqual(status_path.read_bytes(), before_status)
+            self.assertEqual(INIT.metadata(plan_path.read_text(encoding="utf-8"))[0]["plan_revision"], before_revision)
+            self.assertEqual(list(research.glob(".*.tmp")), [])
+            self.assertEqual(list(research.glob(".*.bak")), [])
+
+    def test_force_restore_failure_retains_original_backup_and_reports_path(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); source = self.write_plan(root)
+            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            research = root / "research"
+            plan_path, status_path = research / "PLAN.md", research / "STATUS.md"
+            before_plan, before_status = plan_path.read_bytes(), status_path.read_bytes()
+            files = {plan_path: "replacement plan\n", status_path: "replacement status\n"}
+            original_replace = INIT._replace
+
+            def fail_status_commit_and_plan_restore(source, destination):
+                if source.suffix == ".tmp" and destination == status_path:
+                    raise OSError("injected STATUS commit failure")
+                if source.suffix == ".bak" and destination == plan_path:
+                    raise OSError("injected PLAN restore failure")
+                original_replace(source, destination)
+
+            with mock.patch.object(INIT, "_replace", side_effect=fail_status_commit_and_plan_restore):
+                with self.assertRaises(INIT.ContractError) as raised:
+                    INIT.commit_core_files(files, overwrite=True)
+            retained = list(research.glob(".PLAN.md.*.bak"))
+            self.assertEqual(len(retained), 1)
+            self.assertEqual(retained[0].read_bytes(), before_plan)
+            self.assertIn("injected PLAN restore failure", str(raised.exception))
+            self.assertIn(str(retained[0]), str(raised.exception))
+            self.assertEqual(status_path.read_bytes(), before_status)
+            self.assertEqual(list(research.glob(".*.tmp")), [])
+            self.assertEqual(list(research.glob(".STATUS.md.*.bak")), [])
 
     def test_json_validate_and_deprecated_slug(self):
         with tempfile.TemporaryDirectory() as raw:
