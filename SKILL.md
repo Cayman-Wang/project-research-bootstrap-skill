@@ -12,24 +12,24 @@ Run the state machine `DISCUSS -> FREEZE -> GENERATE -> MAINTAIN`. Keep discussi
 - Enter `DISCUSS` for a new, ambiguous, or materially changed project. Read-only inspection and research are allowed; do not write workspace files.
 - Enter `FREEZE` only when the decision set is coherent. Present the complete Discussion Brief and ask for confirmation. Read-only verification is allowed; do not write workspace files.
 - Enter `GENERATE` only after the user explicitly authorizes creating the frozen workspace, for example “生成计划文件”, “initialize the plan workspace”, or “按冻结方案落盘”. Never infer authorization from approval of the brief.
-- When asked only for current status, read `PLAN.md` and `STATUS.md`, report the answer, and do not write.
-- Enter writable `MAINTAIN` only when the user explicitly requests a status update, decision record, review, retrospective, or handoff. Read the two core records first.
+- For an existing v2 session, begin at `STATUS.md`: it is the sole entrypoint. Read every path named by its `must_read` before answering or acting; read `PLAN.md` when `must_read` names it. A pure read-only status request never writes.
+- Enter writable `MAINTAIN` only when the user explicitly requests a status update, decision record, review, retrospective, or handoff; that request authorizes the corresponding write. If the target or scope is unclear, ask before writing. Read STATUS and all of its `must_read` paths first.
 
-Read [references/discussion_protocol_zh.md](references/discussion_protocol_zh.md) before conducting `DISCUSS` or `FREEZE`. Read exactly one lens when shaping a domain: [references/software_lens_zh.md](references/software_lens_zh.md) for software/product/system work, or [references/research_lens_zh.md](references/research_lens_zh.md) for research/experiment work. Read [references/file_contract_zh.md](references/file_contract_zh.md) before `GENERATE` or `MAINTAIN`.
+Read [references/discussion_protocol_zh.md](references/discussion_protocol_zh.md) before conducting `DISCUSS` or `FREEZE`. Read every applicable lens when shaping a domain: normally exactly one, [references/software_lens_zh.md](references/software_lens_zh.md) for software/product/system work or [references/research_lens_zh.md](references/research_lens_zh.md) for research/experiment work; read both for a mixed research-software or experimental-platform project. Read [references/file_contract_zh.md](references/file_contract_zh.md) before `GENERATE` or `MAINTAIN`.
 
 ## Generate The Minimal Workspace
 
 After explicit authorization, inspect the target before writing.
 
 - Create only `research/PLAN.md` and `research/STATUS.md` by default, using the strict payload in the file contract.
-- Create a lazy record only when explicitly requested, at the dated slug path defined by the file contract; create only that record. Copy a retrospective template only for a requested retrospective. Do not create indexes, prompts, guides, placeholders, or unrelated record directories.
+- Create a lazy record only when explicitly requested, at the dated slug path defined by the file contract; create only that record. For a requested retrospective, instantiate the appropriate asset template, replace every placeholder with real requested/known content, then write it. Templates remain assets and are never workspace records. Do not create empty kind directories, READMEs, indexes, prompts, guides, placeholders, or unrelated record directories.
 - Treat a workspace containing v1 paths or a mixture of v1 and v2 records as read-only. Report the detected layout and refuse to write; v2 does not provide migration.
 - Preserve existing v2 files unless the user explicitly authorizes the requested maintenance change. Do not overwrite a frozen PLAN merely to update progress.
 - Use `scripts/init_research_workspace.py` as the v2 GENERATE entrypoint with its strict JSON `--plan-file` input. Use `scripts/bootstrap_research_workspace.py` only for deprecated compatibility; it is not a v2 entrypoint.
 
 ## Maintain Records
 
-Update `STATUS.md` for observed progress, current milestone, next action, blockers, and timestamps only after explicit maintenance intent. For a major direction change, return to `DISCUSS` and `FREEZE`; show the revised Discussion Brief, obtain re-freeze confirmation, then separately obtain explicit authorization to write the PLAN revision. Keep the previous locked decisions visible in the new brief and identify each changed decision.
+Update `STATUS.md` for observed progress, current milestone, next action, blockers, and timestamps only after explicit MAINTAIN intent. Any change to frozen facts, major scope, success criteria or acceptance, selected approach, dependencies, risks, compliance boundaries, or milestones returns to `DISCUSS` and `FREEZE`; show the revised Discussion Brief, obtain re-freeze confirmation, then separately obtain explicit authorization to write the PLAN revision. Keep the previous locked decisions visible in the new brief and identify each changed decision.
 
 ## Verify
 

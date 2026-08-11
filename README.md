@@ -9,7 +9,7 @@
 - **DISCUSS**: adaptively explore the goal, evidence, constraints, alternatives, risks, and milestone boundaries. No files are written.
 - **FREEZE**: turn the agreed direction into a concise, reviewable plan. No files are written.
 - **GENERATE**: only after an explicit user request, create the durable planning baseline.
-- **MAINTAIN**: make controlled updates as work advances; preserve the plan's history and record only material decisions, milestone changes, risks, and handoffs.
+- **MAINTAIN**: an explicit request to update status or create a decision, review, retrospective, or handoff authorizes that corresponding write. Ask when its target or scope is unclear. A pure status question is read-only; a PLAN revision still needs re-freeze confirmation followed by separate write authorization.
 
 默认生成的基线只有：
 
@@ -19,7 +19,7 @@ research/
 └── STATUS.md    # current milestone, next action, blockers, and required reading
 ```
 
-Additional records are created lazily in `research/records/{decisions,reviews,retrospectives,handoffs}` when the project needs them; the skill does not create a fixed directory tree up front. Runtime outputs belong in the project's normal output locations, not in `research/`.
+For an existing v2 workspace, `STATUS.md` is the only entrypoint: read it first, then read every path listed in `must_read`. Additional records are created lazily in `research/records/{decisions,reviews,retrospectives,handoffs}` only on an explicit request; no empty kind directories, READMEs, indexes, or placeholder files are created. Runtime outputs belong in the project's normal output locations, not in `research/`.
 
 额外记录按需写入 `research/records/{decisions,reviews,retrospectives,handoffs}`，不预先生成固定目录树；运行产物应留在项目的常规输出目录，而不是 `research/`。
 
@@ -30,6 +30,8 @@ mkdir -p ~/.codex/skills
 git clone https://github.com/Cayman-Wang/plan-your-project-skill.git \
   ~/.codex/skills/plan-your-project
 ```
+
+The default branch installs from `main`. The v2 workflow is installed from `main` only after the `v2.0.0` release changes have been merged; until then, development work should be proposed through a pull request rather than presented as an installed v2 release.
 
 Restart or open a new Codex task after installation, then invoke `$plan-your-project` for a project-planning conversation.
 
@@ -64,6 +66,8 @@ python scripts/init_research_workspace.py \
   "evidence": ["Triage sample"], "next_action": "Measure baseline", "freeze_readiness": "READY"
 }
 ```
+
+Every payload string is a non-empty single line. The parser rejects duplicate keys. `alternatives_considered` options must be unique and must each differ from `selected_approach`; dates use exactly `YYYY-MM-DD`.
 
 Use `--dry-run` to preview changes. After re-freeze and separate write authorization, `--force-overwrite` advances a valid v2 workspace to the next plan revision. It preserves still-valid dynamic `STATUS` values for `state`, `current_milestone`, `blockers`, and `must_read`, while `next_action` comes from the new payload; if the prior milestone no longer exists, STATUS returns to the new plan's first milestone. On a v1 workspace, `--validate-only` performs a read-only legacy check and does not migrate or rewrite it.
 

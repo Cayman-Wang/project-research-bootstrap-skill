@@ -8,7 +8,7 @@ v2 默认只生成 `research/PLAN.md` 和 `research/STATUS.md`。使用 `scripts
 
 ## 严格 JSON 输入
 
-`--plan-file`（或 stdin `-`）必须是单个 JSON object，键必须恰好如下。数组项的每个 string 必须非空；`freeze_readiness` 只能是 `READY` 或 `READY_WITH_ASSUMPTIONS`。
+`--plan-file`（或 stdin `-`）必须是单个 JSON object，键必须恰好如下。解析器拒绝重复 key。所有 payload string 必须非空且为单行（不得含 CR 或 LF）；数组项的每个 string 同样如此。`freeze_readiness` 只能是 `READY` 或 `READY_WITH_ASSUMPTIONS`，所有日期必须精确匹配 `YYYY-MM-DD`。
 
 ```json
 {
@@ -34,7 +34,7 @@ v2 默认只生成 `research/PLAN.md` 和 `research/STATUS.md`。使用 `scripts
 
 `success_criteria`、`locked_decisions`、`scope.in`、`alternatives_considered` 和 `milestones` 必须各有至少一项；每个 milestone 的 `acceptance` 也必须非空。`scope.out`、`constraints`、`risks`、`assumptions`、`open_questions`、`evidence` 以及 alternative 的 `tradeoffs` 可为空数组；对象一旦存在，其 string 字段必须非空。`READY_WITH_ASSUMPTIONS` 是例外：此时 `assumptions` 必须非空且已获用户接受。
 
-`schema_version` 必须为 `"2.0"`；`scope`、`alternatives_considered`、`milestones` 和 `risks` 中的对象不得有额外或缺失键。每个 milestone `id` 必须匹配 `^[A-Za-z0-9][A-Za-z0-9._-]*$` 且在计划内唯一。Standard 讨论必须把至少一个非选定路径映射为 `alternatives_considered` 项。仍需独立的 GENERATE 写入授权。
+`schema_version` 必须为 `"2.0"`；`scope`、`alternatives_considered`、`milestones` 和 `risks` 中的对象不得有额外或缺失键。每个 milestone `id` 必须匹配 `^[A-Za-z0-9][A-Za-z0-9._-]*$` 且在计划内唯一。每个 alternative 的 `option` 必须与 `selected_approach` 不同，且 alternatives 内唯一。Standard 讨论必须把至少一个非选定路径映射为 `alternatives_considered` 项。仍需独立的 GENERATE 写入授权。
 
 ## Markdown 输出
 
@@ -63,7 +63,7 @@ current_milestone: M1
 last_updated: YYYY-MM-DD
 ```
 
-`state` 只能是 `planned`、`in_progress`、`blocked` 或 `complete`。STATUS 正文必须链接 `PLAN.md`，并只包含 `next_action`、`blockers`、`must_read` 等动态执行信息。不得复制 goal 或其他冻结计划内容。只有明确的 MAINTAIN 意图可以更新 STATUS；STATUS 更新不得改变 PLAN 的决策。
+`state` 只能是 `planned`、`in_progress`、`blocked` 或 `complete`。STATUS 正文必须使用对应语言的唯一 H1，并且恰好使用三个 H2：英文为 `Next Action`、`Blockers`、`Must Read`，中文为 `下一步`、`阻塞`、`必读`；不得新增其他 H2。动态上下文只能放入这三段，或按需写入 review/handoff。正文必须链接 `PLAN.md`，且只包含 `next_action`、`blockers`、`must_read` 等动态执行信息。`must_read` 是现有 v2 会话的唯一后续读取清单，必须精确包含 `research/PLAN.md`；每项必须是规范化的 workspace-relative 普通文件路径、不得逃逸工作区，且验证时已存在。先读 STATUS，再读其中全部路径。用户明确请求状态更新即授权更新 STATUS；若目标或范围不清，先追问。不得复制 goal 或其他冻结计划内容；STATUS 更新不得改变 PLAN 的决策。
 
 ## Lazy Records
 
@@ -74,12 +74,17 @@ last_updated: YYYY-MM-DD
 - retrospective：记录阶段结果、验证、局限和后续改进。
 - handoff：记录下一位执行者所需的当前状态、上下文和下一动作。
 
-每个文件命名为 `research/records/<kind>/YYYY-MM-DD-<slug>.md`；语言由内容决定，不强制写入文件名。不创建 README、索引、占位文件或其他模板。现有复盘模板仅在用户明确请求复盘时按需复制。
+每个文件命名为 `research/records/<kind>/YYYY-MM-DD-<slug>.md`，其中 `<kind>` 仅可为 `decisions`、`reviews`、`retrospectives`、`handoffs`，`<slug>` 必须匹配 `[a-z0-9][a-z0-9-]*`；语言由内容决定，不强制写入文件名。不创建空 kind 目录、README、索引、占位文件或其他模板。现有复盘模板仅在用户明确请求复盘时实例化；写入前必须替换所有占位符，实例化后不得残留 `{{...}}`，写入后必须执行验证。
 
 ## 验收
 
 - 默认 GENERATE 只创建 PLAN 与 STATUS 两个文件。
 - JSON 输入、CLI 参数与 PLAN 正文数据一致；两份 Markdown frontmatter 满足各自 metadata 契约。
 - STATUS 有效链接到 PLAN，`plan_revision` 与 PLAN 相同，`current_milestone` 是 PLAN 中的里程碑。
-- 生成的 PLAN、STATUS 和 lazy record 不含 `TODO`、`TBD` 或 `<placeholder>` 等未解析占位符。
+- 生成的 PLAN、STATUS 和 lazy record 不含 `TODO`、`TBD`、`<placeholder>` 或 `{{...}}` 等未解析模板占位符；行首或列表项的 `TODO`/`TBD` 默认视为未解析，占项目名称语境的 `TODO app` 或 `TODO application` 除外。
 - v1 和 mixed 布局均未被写入。
+- 每次允许的写入后运行校验，确认没有未解析的模板占位符、记录 kind 和路径有效，且只创建或修改了已授权记录。
+
+## 发布边界
+
+上述 STATUS 正文结构是 v2.0.0 发布前收紧的契约。v1 和 mixed 布局仍保持只读；v2 不提供迁移或改写既有工作区的承诺。

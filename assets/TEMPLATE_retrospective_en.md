@@ -1,27 +1,27 @@
-# Milestone Retrospective: <Title>
+# Milestone Retrospective: {{Title}}
 
-- Record path: `research/records/retrospectives/YYYY-MM-DD-<slug>.md`
-- Date: YYYY-MM-DD
-- Milestone: [Milestone ID]
-- Plan revision: [PLAN revision]
+- Record path: `research/records/retrospectives/{{Date}}-{{slug}}.md`
+- Date: {{Date}}
+- Milestone: {{Milestone ID}}
+- Plan revision: {{PLAN revision}}
 
 ## Problem
-- [Fill in]
+- {{Problem}}
 
 ## Approach
-- [Fill in]
+- {{Approach}}
 
 ## Implementation
-- [Fill in]
+- {{Implementation}}
 
 ## Validation
-- [Fill in]
+- {{Validation}}
 
 ## Limitations
-- [Fill in]
+- {{Limitations}}
 
 ## Next steps
-- [Fill in]
+- {{Next steps}}
 
 ## Attribution and implementation boundary
-- [Fill in]
+- {{Attribution and implementation boundary}}
