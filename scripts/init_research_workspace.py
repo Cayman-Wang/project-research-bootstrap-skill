@@ -220,19 +220,13 @@ def render_status(
     language: str,
     date: str,
     revision: int,
-    preserved: dict[str, Any] | None = None,
+    preserved_must_read: str | None = None,
 ) -> str:
     heading="状态" if language=="zh" else "Status"
     next_action, blockers, must_read, empty = ("下一步", "阻塞", "必读", "无") if language == "zh" else ("Next Action", "Blockers", "Must Read", "None")
-    preserved = preserved or {}
-    milestone_ids = {item["id"] for item in p["milestones"]}
-    current = preserved.get("current_milestone")
-    if current not in milestone_ids:
-        current = p["milestones"][0]["id"]
-    state = preserved.get("state", "planned")
-    blocker_text = preserved.get("blockers_body") or f"- {empty}"
-    must_read_text = preserved.get("must_read_body") or "- research/PLAN.md"
-    return f"---\nworkspace_format: plan-your-project/v2\nrecord: STATUS\nplan_revision: {revision}\nstate: {state}\ncurrent_milestone: {current}\nlast_updated: {date}\n---\n\n# {heading}\n\n## {next_action}\n{p['next_action']}\n\n## {blockers}\n{blocker_text}\n\n## {must_read}\n{must_read_text}\n"
+    current = p["milestones"][0]["id"]
+    must_read_text = preserved_must_read or "- research/PLAN.md"
+    return f"---\nworkspace_format: plan-your-project/v2\nrecord: STATUS\nplan_revision: {revision}\nstate: planned\ncurrent_milestone: {current}\nlast_updated: {date}\n---\n\n# {heading}\n\n## {next_action}\n{p['next_action']}\n\n## {blockers}\n- {empty}\n\n## {must_read}\n{must_read_text}\n"
 
 def metadata(text):
     if not text.startswith("---\n"): raise ContractError("missing metadata")
@@ -275,17 +269,11 @@ def contains_placeholder(text: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
-def read_preserved_status(root: Path, language: str) -> dict[str, Any]:
+def read_preserved_must_read(root: Path, language: str) -> str | None:
     text = (root / "research" / STATUS_NAME).read_text(encoding="utf-8")
-    status_meta, body = metadata(text)
-    blockers = "阻塞" if language == "zh" else "Blockers"
+    _, body = metadata(text)
     must_read = "必读" if language == "zh" else "Must Read"
-    return {
-        "state": status_meta["state"],
-        "current_milestone": status_meta["current_milestone"],
-        "blockers_body": section_body(body, blockers),
-        "must_read_body": section_body(body, must_read),
-    }
+    return section_body(body, must_read)
 def valid_iso_date(value: str) -> bool:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
         return False
@@ -460,12 +448,12 @@ def main(argv=None):
         if layout=="v2" and validate_v2(root): emit(args,layout,"refused",["existing v2 workspace is invalid; refusing writes"]); return 1
         if args.force_overwrite and layout!="v2": emit(args,layout,"refused",["--force-overwrite is only valid for an existing valid v2 workspace"]); return 1
         revision = 1
-        preserved = None
+        preserved_must_read = None
         if layout == "v2" and args.force_overwrite:
             current, _ = metadata((root / "research" / PLAN_NAME).read_text(encoding="utf-8"))
             revision = int(current["plan_revision"]) + 1
-            preserved = read_preserved_status(root, current["language"])
-        p=load_plan(args.plan_file); files={root/"research"/PLAN_NAME:render_plan(p,args.language,args.date,revision),root/"research"/STATUS_NAME:render_status(p,args.language,args.date,revision,preserved)}; actions=[]
+            preserved_must_read = read_preserved_must_read(root, current["language"])
+        p=load_plan(args.plan_file); files={root/"research"/PLAN_NAME:render_plan(p,args.language,args.date,revision),root/"research"/STATUS_NAME:render_status(p,args.language,args.date,revision,preserved_must_read)}; actions=[]
         try:
             for content in files.values():
                 content.encode("utf-8")
@@ -481,7 +469,8 @@ def main(argv=None):
             actions.append(f"{action} {path.relative_to(root)}")
         if not args.dry_run and not all(action.startswith("skip ") for action in actions):
             commit_core_files(files, args.force_overwrite)
-        emit(args,layout,"dry-run" if args.dry_run else "initialized",[],actions); return 0
+        status = "dry-run" if args.dry_run else "unchanged" if all(action.startswith("skip ") for action in actions) else "initialized"
+        emit(args,layout,status,[],actions); return 0
     except (ContractError, OSError) as exc:
         try: emit(args, layout if "layout" in locals() else "invalid", "invalid", [str(exc)])
         except UnboundLocalError: print(f"error: {exc}",file=sys.stderr)

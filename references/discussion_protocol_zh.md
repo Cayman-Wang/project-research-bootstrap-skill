@@ -55,4 +55,4 @@ Standard 的 Options 至少包含推荐路径和一个合理 alternative，并�
 
 把未知项标为 Open Decision 或 Assumption，不要伪造确定性。re-freeze 时保留先前 locked decisions，并在 Change Log 中逐项说明保留、替换或废弃的决定。
 
-已冻结后，任何改变冻结事实、重大范围、成功标准或验收、选定方案、依赖、风险、合规边界或里程碑的请求，均不得作为 MAINTAIN 直接写入：返回 DISCUSS，形成修订 Brief，重新 FREEZE 并取得确认；之后仍须单独取得写入 PLAN 的明确授权。
+已冻结后，只有冻结终点、关键依赖或约束、风险基线、里程碑定义或验收发生变化时才返回 DISCUSS，形成修订 Brief，重新 FREEZE 并取得确认；之后仍须单独取得写入 PLAN 的明确授权。执行顺序、时间、当前阻塞、风险状态和实际进度只更新 STATUS。

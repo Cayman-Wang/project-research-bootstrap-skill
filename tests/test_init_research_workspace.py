@@ -129,8 +129,13 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
             original = (root / "research" / "PLAN.md").read_text(encoding="utf-8")
             source.write_text(json.dumps(plan(goal="changed")), encoding="utf-8")
-            self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
+            unchanged = self.run_cli(root, "--plan-file", str(source), "--json")
+            self.assertEqual(unchanged.returncode, 0)
+            self.assertEqual(json.loads(unchanged.stdout)["status"], "unchanged")
+            self.assertEqual(json.loads(unchanged.stdout)["counts"]["skipped"], 2)
             self.assertEqual(original, (root / "research" / "PLAN.md").read_text(encoding="utf-8"))
+            dry_run = self.run_cli(root, "--plan-file", str(source), "--dry-run", "--json")
+            self.assertEqual(json.loads(dry_run.stdout)["status"], "dry-run")
             self.assertEqual(self.run_cli(root, "--plan-file", str(source), "--force-overwrite").returncode, 0)
             current = (root / "research" / "PLAN.md").read_text(encoding="utf-8")
             self.assertIn("changed", current)
@@ -391,25 +396,18 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             self.assertEqual(self.run_cli(root, "--plan-file", str(source), "--adopt-existing-research-dir").returncode, 0)
             self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
 
-    def test_force_preserves_status_progress_and_unrelated_records(self):
+    def test_refreeze_resets_status_and_preserves_context_and_unrelated_records(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw); source = self.write_plan(root)
             self.assertEqual(self.run_cli(root, "--plan-file", str(source)).returncode, 0)
             research = root / "research"; status = research / "STATUS.md"
             status_text = status.read_text(encoding="utf-8")
-            status_text = status_text.replace("state: planned", "state: in_progress")
+            status_text = status_text.replace("state: planned", "state: complete")
             status_text = status_text.replace("## 阻塞\n- 无", "## 阻塞\nWaiting for review\nOwner: team")
             status_text = status_text.replace("## 必读\n- research/PLAN.md", "## 必读\n- research/PLAN.md\n- research/NOTES.md")
             status.write_text(status_text, encoding="utf-8")
             notes = research / "NOTES.md"; notes.write_text("unchanged", encoding="utf-8")
             record = research / "records" / "decisions" / "2026-08-11-record.md"; record.parent.mkdir(parents=True); record.write_text("record", encoding="utf-8")
-            source.write_text(json.dumps(plan(next_action="Ship it")), encoding="utf-8")
-            self.assertEqual(self.run_cli(root, "--plan-file", str(source), "--force-overwrite").returncode, 0)
-            updated = status.read_text(encoding="utf-8")
-            self.assertIn("state: in_progress", updated); self.assertIn("current_milestone: M1", updated)
-            self.assertIn("Waiting for review\nOwner: team", updated); self.assertIn("research/NOTES.md", updated); self.assertIn("Ship it", updated)
-            self.assertEqual(notes.read_text(encoding="utf-8"), "unchanged"); self.assertEqual(record.read_text(encoding="utf-8"), "record")
-            self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
             replacement = plan(
                 milestones=[{"id": "M2", "outcome": "Release", "acceptance": ["Published"]}],
                 next_action="Release",
@@ -417,7 +415,11 @@ class InitResearchWorkspaceTests(unittest.TestCase):
             source.write_text(json.dumps(replacement), encoding="utf-8")
             self.assertEqual(self.run_cli(root, "--plan-file", str(source), "--force-overwrite").returncode, 0)
             updated = status.read_text(encoding="utf-8")
-            self.assertIn("state: in_progress", updated); self.assertIn("current_milestone: M2", updated)
+            self.assertIn("state: planned", updated); self.assertIn("current_milestone: M2", updated)
+            self.assertIn("## 阻塞\n- 无", updated); self.assertNotIn("Waiting for review", updated)
+            self.assertIn("research/NOTES.md", updated); self.assertIn("Release", updated)
+            self.assertEqual(notes.read_text(encoding="utf-8"), "unchanged"); self.assertEqual(record.read_text(encoding="utf-8"), "record")
+            self.assertEqual(self.run_cli(root, "--validate-only").returncode, 0)
 
     def test_legacy_validation_and_v2_metadata_consistency(self):
         with tempfile.TemporaryDirectory() as raw:

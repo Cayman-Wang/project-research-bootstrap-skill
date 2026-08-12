@@ -63,7 +63,7 @@ current_milestone: M1
 last_updated: YYYY-MM-DD
 ```
 
-`state` 只能是 `planned`、`in_progress`、`blocked` 或 `complete`。STATUS 正文必须使用对应语言的唯一 H1，并且恰好使用三个 H2：英文为 `Next Action`、`Blockers`、`Must Read`，中文为 `下一步`、`阻塞`、`必读`；不得新增其他 H2。动态上下文只能放入这三段，或按需写入 review/handoff。正文必须链接 `PLAN.md`，且只包含 `next_action`、`blockers`、`must_read` 等动态执行信息。`must_read` 是现有 v2 会话的唯一后续读取清单，必须精确包含 `research/PLAN.md`；每项必须是规范化的 workspace-relative 普通文件路径、不得逃逸工作区，且验证时已存在。先读 STATUS，再读其中全部路径。用户明确请求状态更新即授权更新 STATUS；若目标或范围不清，先追问。不得复制 goal 或其他冻结计划内容；STATUS 更新不得改变 PLAN 的决策。
+`state` 只能是 `planned`、`in_progress`、`blocked` 或 `complete`。STATUS 正文必须使用对应语言的唯一 H1，并且恰好使用三个 H2：英文为 `Next Action`、`Blockers`、`Must Read`，中文为 `下一步`、`阻塞`、`必读`；不得新增其他 H2。动态上下文只能放入这三段，或按需写入 review/handoff。正文必须链接 `PLAN.md`，且只包含 `next_action`、`blockers`、`must_read` 等动态执行信息。`must_read` 是现有 v2 会话的唯一后续读取清单，必须精确包含 `research/PLAN.md`；每项必须是规范化的 workspace-relative 普通文件路径、不得逃逸工作区，且验证时已存在。re-freeze overwrite 后 STATUS 重置为 `planned`、新 PLAN 的首个里程碑和无阻塞，只保留仍有效的 `must_read`。先读 STATUS，再读其中全部路径。用户明确请求状态更新即授权更新 STATUS；若目标或范围不清，先追问。不得复制 goal 或其他冻结计划内容；STATUS 更新不得改变 PLAN 的决策。
 
 ## Lazy Records
 

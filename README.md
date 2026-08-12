@@ -53,7 +53,7 @@ python scripts/init_research_workspace.py \
   --plan-file <FILE|->
 ```
 
-`--plan-file` is the validated frozen payload; use `-` to read it from standard input. Use `--help` for available options, including `--validate-only` and `--dry-run`; see the [file contract](references/file_contract_zh.md) for the payload schema, validation rules, and workspace behavior.
+`--plan-file` is the validated frozen payload; use `-` to read it from standard input. Re-running against an existing v2 workspace is unchanged unless an authorized re-freeze uses `--force-overwrite`; re-freeze resets STATUS progress while retaining valid `must_read` entries and unrelated files or records. Use `--help` for other options, including `--validate-only` and `--dry-run`; see the [file contract](references/file_contract_zh.md) for the payload schema, validation rules, and workspace behavior.
 
 ## v2.0.0 Breaking Changes / 破坏性变更
 
