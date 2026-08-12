@@ -37,7 +37,7 @@ git clone https://github.com/Cayman-Wang/plan-your-project-skill.git \
   ~/.codex/skills/plan-your-project
 ```
 
-The default branch installs from `main`. It includes the v2 planning workflow and the v2.1 discussion enhancements: boundary-aware discovery, stronger deep-review challenges, and sharper software and research lenses.
+The default branch installs from `main`. It includes the v2 planning workflow and the v2.2 discussion enhancements: boundary-aware discovery, decision-uncertainty prioritization, discoverable-fact routing, and sharper software and research lenses.
 
 Algorithm projects can also use a user-specified local paper directory for selective, evidence-aware planning.
 
